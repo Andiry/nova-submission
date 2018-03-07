@@ -184,4 +184,7 @@ static inline int nova_persist_inode(struct nova_inode *pi)
 	return 0;
 }
 
+int nova_get_inode_address(struct super_block *sb, u64 ino,
+	u64 *pi_addr, int extendable);
+struct inode *nova_iget(struct super_block *sb, unsigned long ino);
 #endif
