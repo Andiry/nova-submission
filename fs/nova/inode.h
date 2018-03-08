@@ -5,6 +5,7 @@ struct nova_inode_info_header;
 struct nova_inode;
 
 #include "super.h"
+#include "log.h"
 
 enum nova_new_inode_type {
 	TYPE_CREATE = 0,
@@ -141,6 +142,17 @@ static inline void nova_update_tail(struct nova_inode *pi, u64 new_tail)
 	nova_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 1);
 
 	NOVA_END_TIMING(update_tail_t, update_time);
+}
+
+static inline void nova_update_inode(struct super_block *sb,
+	struct inode *inode, struct nova_inode *pi,
+	struct nova_inode_update *update)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+
+	sih->log_tail = update->tail;
+	nova_update_tail(pi, update->tail);
 }
 
 static inline
