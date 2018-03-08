@@ -218,6 +218,35 @@ static int nova_append_log_entry(struct super_block *sb,
 	return 0;
 }
 
+/* Perform lite transaction to atomically in-place update log entry */
+static int nova_inplace_update_log_entry(struct super_block *sb,
+	struct inode *inode, void *entry,
+	struct nova_log_entry_info *entry_info)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	enum nova_entry_type type = entry_info->type;
+	u64 journal_tail;
+	size_t size;
+	int cpu;
+	timing_t update_time;
+
+	NOVA_START_TIMING(update_entry_t, update_time);
+	size = nova_get_log_entry_size(sb, type);
+
+	cpu = smp_processor_id();
+	spin_lock(&sbi->journal_locks[cpu]);
+	journal_tail = nova_create_logentry_transaction(sb, entry, type, cpu);
+	nova_update_log_entry(sb, inode, entry, entry_info);
+
+	PERSISTENT_BARRIER();
+
+	nova_commit_lite_transaction(sb, journal_tail, cpu);
+	spin_unlock(&sbi->journal_locks[cpu]);
+
+	NOVA_END_TIMING(update_entry_t, update_time);
+	return 0;
+}
+
 /* Returns new tail after append */
 static int nova_append_setattr_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
@@ -250,6 +279,125 @@ out:
 	return ret;
 }
 
+static int nova_can_inplace_update_setattr(struct super_block *sb,
+	struct nova_inode_info_header *sih, u64 epoch_id)
+{
+	u64 last_log = 0;
+	struct nova_setattr_logentry *entry = NULL;
+
+	last_log = sih->last_setattr;
+	if (last_log) {
+		entry = (struct nova_setattr_logentry *)nova_get_block(sb,
+								last_log);
+		/* Do not overwrite setsize entry */
+		if (entry->attr & ATTR_SIZE)
+			return 0;
+		if (entry->epoch_id == epoch_id)
+			return 1;
+	}
+
+	return 0;
+}
+
+static int nova_inplace_update_setattr_entry(struct super_block *sb,
+	struct inode *inode, struct nova_inode_info_header *sih,
+	struct iattr *attr, u64 epoch_id)
+{
+	struct nova_setattr_logentry *entry = NULL;
+	struct nova_log_entry_info entry_info;
+	u64 last_log = 0;
+
+	nova_dbgv("%s : Modifying last log entry for inode %lu\n",
+				__func__, inode->i_ino);
+	last_log = sih->last_setattr;
+	entry = (struct nova_setattr_logentry *)nova_get_block(sb,
+							last_log);
+
+	entry_info.type = SET_ATTR;
+	entry_info.attr = attr;
+	entry_info.epoch_id = epoch_id;
+	entry_info.trans_id = sih->trans_id;
+
+	return nova_inplace_update_log_entry(sb, inode, entry,
+					&entry_info);
+}
+
+int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
+	struct nova_inode *pi, unsigned int ia_valid, struct iattr *attr,
+	u64 epoch_id)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_update update;
+	u64 last_setattr = 0;
+	int ret;
+
+	if (ia_valid & ATTR_MODE)
+		sih->i_mode = inode->i_mode;
+
+	/*
+	 * Let's try to do inplace update.
+	 */
+	if (!(ia_valid & ATTR_SIZE) &&
+			nova_can_inplace_update_setattr(sb, sih, epoch_id)) {
+		nova_inplace_update_setattr_entry(sb, inode, sih,
+						attr, epoch_id);
+	} else {
+		/* We are holding inode lock so OK to append the log */
+		nova_dbgv("%s : Appending last log entry for inode ino = %lu\n",
+				__func__, inode->i_ino);
+		update.tail = 0;
+		ret = nova_append_setattr_entry(sb, pi, inode, attr, &update,
+						&last_setattr, epoch_id);
+		if (ret) {
+			nova_dbg("%s: append setattr entry failure\n",
+								__func__);
+			return ret;
+		}
+
+		nova_update_inode(sb, inode, pi, &update);
+	}
+
+	return 0;
+}
+
+static int nova_can_inplace_update_lcentry(struct super_block *sb,
+	struct nova_inode_info_header *sih, u64 epoch_id)
+{
+	u64 last_log = 0;
+	struct nova_link_change_entry *entry = NULL;
+
+	last_log = sih->last_link_change;
+	if (last_log) {
+		entry = (struct nova_link_change_entry *)nova_get_block(sb,
+								last_log);
+		if (entry->epoch_id == epoch_id)
+			return 1;
+	}
+
+	return 0;
+}
+
+static int nova_inplace_update_lcentry(struct super_block *sb,
+	struct inode *inode, struct nova_inode_info_header *sih,
+	u64 epoch_id)
+{
+	struct nova_link_change_entry *entry = NULL;
+	struct nova_log_entry_info entry_info;
+	u64 last_log = 0;
+
+	last_log = sih->last_link_change;
+	entry = (struct nova_link_change_entry *)nova_get_block(sb,
+							last_log);
+
+	entry_info.type = LINK_CHANGE;
+	entry_info.epoch_id = epoch_id;
+	entry_info.trans_id = sih->trans_id;
+
+	return nova_inplace_update_log_entry(sb, inode, entry,
+					&entry_info);
+}
+
 /* Returns new tail after append */
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
@@ -262,6 +410,15 @@ int nova_append_link_change_entry(struct super_block *sb,
 	timing_t append_time;
 
 	NOVA_START_TIMING(append_link_change_t, append_time);
+
+	if (nova_can_inplace_update_lcentry(sb, sih, epoch_id)) {
+		nova_inplace_update_lcentry(sb, inode, sih, epoch_id);
+		update->tail = sih->log_tail;
+
+		*old_linkc = 0;
+		sih->trans_id++;
+		goto out;
+	}
 
 	entry_info.type = LINK_CHANGE;
 	entry_info.update = update;
@@ -280,6 +437,14 @@ int nova_append_link_change_entry(struct super_block *sb,
 out:
 	NOVA_END_TIMING(append_link_change_t, append_time);
 	return ret;
+}
+
+int nova_inplace_update_write_entry(struct super_block *sb,
+	struct inode *inode, struct nova_file_write_entry *entry,
+	struct nova_log_entry_info *entry_info)
+{
+	return nova_inplace_update_log_entry(sb, inode, entry,
+					entry_info);
 }
 
 /*
@@ -314,6 +479,24 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 
 	NOVA_END_TIMING(append_file_entry_t, append_time);
 	return ret;
+}
+
+int nova_inplace_update_dentry(struct super_block *sb,
+	struct inode *dir, struct nova_dentry *dentry, int link_change,
+	u64 epoch_id)
+{
+	struct nova_inode_info *si = NOVA_I(dir);
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_log_entry_info entry_info;
+
+	entry_info.type = DIR_LOG;
+	entry_info.link_change = link_change;
+	entry_info.epoch_id = epoch_id;
+	entry_info.trans_id = sih->trans_id;
+	entry_info.inplace = 1;
+
+	return nova_inplace_update_log_entry(sb, dir, dentry,
+					&entry_info);
 }
 
 int nova_append_dentry(struct super_block *sb, struct nova_inode *pi,
