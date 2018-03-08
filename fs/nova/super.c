@@ -617,6 +617,59 @@ out:
 	return retval;
 }
 
+static int nova_show_options(struct seq_file *seq, struct dentry *root)
+{
+	struct nova_sb_info *sbi = NOVA_SB(root->d_sb);
+
+	if (sbi->mode != (0777 | S_ISVTX))
+		seq_printf(seq, ",mode=%03o", sbi->mode);
+	if (uid_valid(sbi->uid))
+		seq_printf(seq, ",uid=%u", from_kuid(&init_user_ns, sbi->uid));
+	if (gid_valid(sbi->gid))
+		seq_printf(seq, ",gid=%u", from_kgid(&init_user_ns, sbi->gid));
+	if (test_opt(root->d_sb, ERRORS_RO))
+		seq_puts(seq, ",errors=remount-ro");
+	if (test_opt(root->d_sb, ERRORS_PANIC))
+		seq_puts(seq, ",errors=panic");
+	if (test_opt(root->d_sb, DAX))
+		seq_puts(seq, ",dax");
+
+	return 0;
+}
+
+static int nova_remount(struct super_block *sb, int *mntflags, char *data)
+{
+	unsigned long old_sb_flags;
+	unsigned long old_mount_opt;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	int ret = -EINVAL;
+
+	/* Store the old options */
+	mutex_lock(&sbi->s_lock);
+	old_sb_flags = sb->s_flags;
+	old_mount_opt = sbi->s_mount_opt;
+
+	if (nova_parse_options(data, sbi, 1))
+		goto restore_opt;
+
+	sb->s_flags = (sb->s_flags & ~MS_POSIXACL) |
+		      ((sbi->s_mount_opt & NOVA_MOUNT_POSIX_ACL) ?
+		       MS_POSIXACL : 0);
+
+	if ((*mntflags & MS_RDONLY) != (sb->s_flags & MS_RDONLY))
+		nova_update_mount_time(sb);
+
+	mutex_unlock(&sbi->s_lock);
+	ret = 0;
+	return ret;
+
+restore_opt:
+	sb->s_flags = old_sb_flags;
+	sbi->s_mount_opt = old_mount_opt;
+	mutex_unlock(&sbi->s_lock);
+	return ret;
+}
+
 static void nova_put_super(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -697,6 +750,8 @@ static struct super_operations nova_sops = {
 	.alloc_inode	= nova_alloc_inode,
 	.destroy_inode	= nova_destroy_inode,
 	.put_super	= nova_put_super,
+	.remount_fs	= nova_remount,
+	.show_options	= nova_show_options,
 };
 
 static struct dentry *nova_mount(struct file_system_type *fs_type,
