@@ -69,6 +69,14 @@ extern void nova_init_blockmap(struct super_block *sb, int recovery);
 extern unsigned long nova_count_free_blocks(struct super_block *sb);
 inline int nova_insert_blocktree(struct nova_sb_info *sbi,
 	struct rb_root *tree, struct nova_range_node *new_node);
+extern int nova_free_data_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr, int num);
+extern int nova_free_log_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr, int num);
+int nova_find_free_slot(struct nova_sb_info *sbi,
+	struct rb_root *tree, unsigned long range_low,
+	unsigned long range_high, struct nova_range_node **prev,
+	struct nova_range_node **next);
 
 extern int nova_insert_range_node(struct rb_root *tree,
 				  struct nova_range_node *new_node);
