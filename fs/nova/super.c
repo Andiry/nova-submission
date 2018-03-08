@@ -379,6 +379,11 @@ static struct nova_inode *nova_init(struct super_block *sb,
 
 	nova_init_blockmap(sb, 0);
 
+	if (nova_lite_journal_hard_init(sb) < 0) {
+		nova_err(sb, "Lite journal hard initialization failed\n");
+		return ERR_PTR(-EINVAL);
+	}
+
 	if (nova_init_inode_inuse_list(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
@@ -598,6 +603,12 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
+	if (nova_lite_journal_soft_init(sb)) {
+		retval = -EINVAL;
+		nova_err(sb, "Lite journal initialization failed\n");
+		goto out;
+	}
+
 	blocksize = le32_to_cpu(sbi->nova_sb->s_blocksize);
 	nova_set_blocksize(sb, blocksize);
 
@@ -646,6 +657,9 @@ out:
 	sbi->zeroed_page = NULL;
 
 	nova_delete_free_lists(sb);
+
+	kfree(sbi->journal_locks);
+	sbi->journal_locks = NULL;
 
 	kfree(sbi->inode_maps);
 	sbi->inode_maps = NULL;
@@ -745,6 +759,7 @@ static void nova_put_super(struct super_block *sb)
 
 	kfree(sbi->zeroed_page);
 	nova_dbgmask = 0;
+	kfree(sbi->journal_locks);
 
 	for (i = 0; i < sbi->cpus; i++) {
 		inode_map = &sbi->inode_maps[i];

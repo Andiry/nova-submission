@@ -119,6 +119,9 @@ struct nova_sb_info {
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
 
+	/* Per-CPU journal lock */
+	spinlock_t *journal_locks;
+
 	/* Per-CPU inode map */
 	struct inode_map	*inode_maps;
 
