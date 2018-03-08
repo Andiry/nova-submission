@@ -73,6 +73,16 @@ extern int nova_free_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long blocknr, int num);
 extern int nova_free_log_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long blocknr, int num);
+extern inline int nova_new_data_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long *blocknr,
+	unsigned long start_blk, unsigned int num,
+	enum nova_alloc_init zero, int cpu,
+	enum nova_alloc_direction from_tail);
+extern int nova_new_log_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih,
+	unsigned long *blocknr, unsigned int num,
+	enum nova_alloc_init zero, int cpu,
+	enum nova_alloc_direction from_tail);
 int nova_find_free_slot(struct nova_sb_info *sbi,
 	struct rb_root *tree, unsigned long range_low,
 	unsigned long range_high, struct nova_range_node **prev,
