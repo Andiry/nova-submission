@@ -116,6 +116,54 @@ static u64 nova_save_free_list_blocknodes(struct super_block *sb, int cpu,
 	return temp_tail;
 }
 
+void nova_save_inode_list_to_log(struct super_block *sb)
+{
+	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODELIST_INO);
+	struct nova_inode_info_header sih;
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	unsigned long num_blocks;
+	unsigned long num_nodes = 0;
+	struct inode_map *inode_map;
+	unsigned long i;
+	u64 temp_tail;
+	u64 new_block;
+	int allocated;
+
+	sih.ino = NOVA_INODELIST_INO;
+	sih.i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
+	sih.i_blocks = 0;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		inode_map = &sbi->inode_maps[i];
+		num_nodes += inode_map->num_range_node_inode;
+	}
+
+	num_blocks = num_nodes / RANGENODE_PER_PAGE;
+	if (num_nodes % RANGENODE_PER_PAGE)
+		num_blocks++;
+
+	allocated = nova_allocate_inode_log_pages(sb, &sih, num_blocks,
+						&new_block, ANY_CPU, 0);
+	if (allocated != num_blocks) {
+		nova_dbg("Error saving inode list: %d\n", allocated);
+		return;
+	}
+
+	temp_tail = new_block;
+	for (i = 0; i < sbi->cpus; i++) {
+		inode_map = &sbi->inode_maps[i];
+		temp_tail = nova_save_range_nodes_to_log(sb,
+				&inode_map->inode_inuse_tree, temp_tail, i);
+	}
+
+	pi->log_head = new_block;
+	nova_update_tail(pi, temp_tail);
+	nova_flush_buffer(&pi->log_head, CACHELINE_SIZE, 0);
+
+	nova_dbg("%s: %lu inode nodes, pi head 0x%llx, tail 0x%llx\n",
+		__func__, num_nodes, pi->log_head, pi->log_tail);
+}
+
 void nova_save_blocknode_mappings_to_log(struct super_block *sb)
 {
 	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_BLOCKNODE_INO);
