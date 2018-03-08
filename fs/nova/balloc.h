@@ -66,6 +66,7 @@ inline struct nova_range_node *nova_alloc_blocknode(struct super_block *sb);
 inline void nova_free_blocknode(struct super_block *sb,
 	struct nova_range_node *bnode);
 extern void nova_init_blockmap(struct super_block *sb, int recovery);
+extern unsigned long nova_count_free_blocks(struct super_block *sb);
 inline int nova_insert_blocktree(struct nova_sb_info *sbi,
 	struct rb_root *tree, struct nova_range_node *new_node);
 
