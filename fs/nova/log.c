@@ -20,6 +20,168 @@
 #include "inode.h"
 #include "log.h"
 
+static int nova_update_old_dentry(struct super_block *sb,
+	struct inode *dir, struct nova_dentry *dentry,
+	struct nova_log_entry_info *entry_info)
+{
+	unsigned short links_count;
+	int link_change = entry_info->link_change;
+	u64 addr;
+
+	dentry->epoch_id = entry_info->epoch_id;
+	dentry->trans_id = entry_info->trans_id;
+	/* Remove_dentry */
+	dentry->ino = cpu_to_le64(0);
+	dentry->invalid = 1;
+	dentry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
+
+	links_count = cpu_to_le16(dir->i_nlink);
+	if (links_count == 0 && link_change == -1)
+		links_count = 0;
+	else
+		links_count += link_change;
+	dentry->links_count = cpu_to_le16(links_count);
+
+	addr = nova_get_addr_off(NOVA_SB(sb), dentry);
+	nova_inc_page_invalid_entries(sb, addr);
+
+	nova_persist_entry(dentry);
+
+	return 0;
+}
+
+static int nova_update_new_dentry(struct super_block *sb,
+	struct inode *dir, struct nova_dentry *entry,
+	struct nova_log_entry_info *entry_info)
+{
+	struct dentry *dentry = entry_info->data;
+	unsigned short links_count;
+	int link_change = entry_info->link_change;
+
+	entry->entry_type = DIR_LOG;
+	entry->epoch_id = entry_info->epoch_id;
+	entry->trans_id = entry_info->trans_id;
+	entry->ino = entry_info->ino;
+	entry->name_len = dentry->d_name.len;
+	memcpy_to_pmem_nocache(entry->name, dentry->d_name.name,
+				dentry->d_name.len);
+	entry->name[dentry->d_name.len] = '\0';
+	entry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
+	//entry->size = cpu_to_le64(dir->i_size);
+
+	links_count = cpu_to_le16(dir->i_nlink);
+	if (links_count == 0 && link_change == -1)
+		links_count = 0;
+	else
+		links_count += link_change;
+	entry->links_count = cpu_to_le16(links_count);
+
+	/* Update actual de_len */
+	entry->de_len = cpu_to_le16(entry_info->file_size);
+
+	nova_persist_entry(entry);
+
+	return 0;
+}
+
+static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
+	void *entry, struct nova_log_entry_info *entry_info)
+{
+	enum nova_entry_type type = entry_info->type;
+
+	switch (type) {
+	case FILE_WRITE:
+		break;
+	case DIR_LOG:
+		if (entry_info->inplace)
+			nova_update_old_dentry(sb, inode, entry, entry_info);
+		else
+			nova_update_new_dentry(sb, inode, entry, entry_info);
+		break;
+	case SET_ATTR:
+		break;
+	case LINK_CHANGE:
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+static int nova_append_log_entry(struct super_block *sb,
+	struct nova_inode *pi, struct inode *inode,
+	struct nova_inode_info_header *sih,
+	struct nova_log_entry_info *entry_info)
+{
+	void *entry;
+	enum nova_entry_type type = entry_info->type;
+	struct nova_inode_update *update = entry_info->update;
+	u64 tail;
+	u64 curr_p;
+	size_t size;
+	int extended = 0;
+
+	if (type == DIR_LOG)
+		size = entry_info->file_size;
+	else
+		size = nova_get_log_entry_size(sb, type);
+
+	tail = update->tail;
+
+	curr_p = nova_get_append_head(sb, pi, sih, tail, size,
+						MAIN_LOG, 0, &extended);
+	if (curr_p == 0)
+		return -ENOSPC;
+
+	nova_dbg_verbose("%s: inode %lu attr change entry @ 0x%llx\n",
+				__func__, sih->ino, curr_p);
+
+	entry = nova_get_block(sb, curr_p);
+	/* inode is already updated with attr */
+	memset(entry, 0, size);
+	nova_update_log_entry(sb, inode, entry, entry_info);
+	nova_inc_page_num_entries(sb, curr_p);
+	update->curr_entry = curr_p;
+	update->tail = curr_p + size;
+
+	entry_info->curr_p = curr_p;
+	return 0;
+}
+
+int nova_append_dentry(struct super_block *sb, struct nova_inode *pi,
+	struct inode *dir, struct dentry *dentry, u64 ino,
+	unsigned short de_len, struct nova_inode_update *update,
+	int link_change, u64 epoch_id)
+{
+	struct nova_inode_info *si = NOVA_I(dir);
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_log_entry_info entry_info;
+	timing_t append_time;
+	int ret;
+
+	NOVA_START_TIMING(append_dir_entry_t, append_time);
+
+	entry_info.type = DIR_LOG;
+	entry_info.update = update;
+	entry_info.data = dentry;
+	entry_info.ino = ino;
+	entry_info.link_change = link_change;
+	entry_info.file_size = de_len;
+	entry_info.epoch_id = epoch_id;
+	entry_info.trans_id = sih->trans_id;
+	entry_info.inplace = 0;
+
+	ret = nova_append_log_entry(sb, pi, dir, sih, &entry_info);
+	if (ret)
+		nova_err(sb, "%s failed\n", __func__);
+
+	dir->i_blocks = sih->i_blocks;
+
+	NOVA_END_TIMING(append_dir_entry_t, append_time);
+	return ret;
+}
+
 /* Coalesce log pages to a singly linked list */
 static int nova_coalesce_log_pages(struct super_block *sb,
 	unsigned long prev_blocknr, unsigned long first_blocknr,

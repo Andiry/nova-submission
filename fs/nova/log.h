@@ -364,6 +364,10 @@ static inline int is_dir_init_entry(struct super_block *sb,
 }
 
 
+int nova_append_dentry(struct super_block *sb, struct nova_inode *pi,
+	struct inode *dir, struct dentry *dentry, u64 ino,
+	unsigned short de_len, struct nova_inode_update *update,
+	int link_change, u64 epoch_id);
 int nova_allocate_inode_log_pages(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long num_pages,
 	u64 *new_block, int cpuid, enum nova_alloc_direction from_tail);
