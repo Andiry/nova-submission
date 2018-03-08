@@ -35,6 +35,7 @@ struct	nova_inode_log_page {
 	struct nova_inode_page_tail page_tail;
 } __attribute((__packed__));
 
+#define	EXTEND_THRESHOLD	256
 
 enum nova_entry_type {
 	FILE_WRITE = 1,
@@ -183,5 +184,15 @@ static inline bool goto_next_page(struct super_block *sb, u64 curr_p)
 }
 
 
+int nova_allocate_inode_log_pages(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long num_pages,
+	u64 *new_block, int cpuid, enum nova_alloc_direction from_tail);
+u64 nova_get_append_head(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih, u64 tail, size_t size, int log_id,
+	int thorough_gc, int *extended);
+int nova_free_contiguous_log_blocks(struct super_block *sb,
+	struct nova_inode_info_header *sih, u64 head);
+int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih);
 
 #endif
