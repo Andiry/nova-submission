@@ -349,6 +349,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	struct nova_inode *root_i, *pi;
 	struct nova_super_block *super;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	u64 epoch_id;
 	timing_t init_time;
 
 	NOVA_START_TIMING(new_init_t, init_time);
@@ -414,6 +415,10 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	root_i->valid = 1;
 
 	nova_flush_buffer(root_i, sizeof(*root_i), false);
+
+	epoch_id = nova_get_epoch_id(sb);
+	nova_append_dir_init_entries(sb, root_i, NOVA_ROOT_INO,
+					NOVA_ROOT_INO, epoch_id);
 
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
