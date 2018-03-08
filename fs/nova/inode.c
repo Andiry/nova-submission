@@ -29,6 +29,61 @@
 unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX] = {12, 21, 30};
 uint32_t blk_type_to_size[NOVA_BLOCK_TYPE_MAX] = {0x1000, 0x200000, 0x40000000};
 
+static int nova_alloc_inode_table(struct super_block *sb,
+	struct nova_inode_info_header *sih)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct inode_table *inode_table;
+	unsigned long blocknr;
+	u64 block;
+	int allocated;
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		inode_table = nova_get_inode_table(sb, i);
+		if (!inode_table)
+			return -EINVAL;
+
+		allocated = nova_new_log_blocks(sb, sih, &blocknr, 1,
+				ALLOC_INIT_ZERO, i, ALLOC_FROM_HEAD);
+
+		nova_dbgv("%s: allocate log @ 0x%lx\n", __func__,
+							blocknr);
+		if (allocated != 1 || blocknr == 0)
+			return -ENOSPC;
+
+		block = nova_get_block_off(sb, blocknr, NOVA_BLOCK_TYPE_2M);
+		inode_table->log_head = block;
+		nova_flush_buffer(inode_table, CACHELINE_SIZE, 0);
+	}
+
+	return 0;
+}
+
+int nova_init_inode_table(struct super_block *sb)
+{
+	struct nova_inode *pi = nova_get_inode_by_ino(sb, NOVA_INODETABLE_INO);
+	struct nova_inode_info_header sih;
+	int ret = 0;
+
+	pi->i_mode = 0;
+	pi->i_uid = 0;
+	pi->i_gid = 0;
+	pi->i_links_count = cpu_to_le16(1);
+	pi->i_flags = 0;
+	pi->nova_ino = NOVA_INODETABLE_INO;
+
+	pi->i_blk_type = NOVA_BLOCK_TYPE_2M;
+
+	sih.ino = NOVA_INODETABLE_INO;
+	sih.i_blk_type = NOVA_BLOCK_TYPE_2M;
+
+	ret = nova_alloc_inode_table(sb, &sih);
+
+	PERSISTENT_BARRIER();
+	return ret;
+}
+
 void nova_set_inode_flags(struct inode *inode, struct nova_inode *pi,
 	unsigned int flags)
 {

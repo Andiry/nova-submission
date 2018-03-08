@@ -60,6 +60,13 @@ struct nova_inode {
 } __attribute((__packed__));
 
 /*
+ * Inode table.  It's a linked list of pages.
+ */
+struct inode_table {
+	__le64 log_head;
+};
+
+/*
  * NOVA-specific inode state kept in DRAM
  */
 struct nova_inode_info_header {
@@ -136,6 +143,22 @@ static inline void nova_update_tail(struct nova_inode *pi, u64 new_tail)
 	NOVA_END_TIMING(update_tail_t, update_time);
 }
 
+static inline
+struct inode_table *nova_get_inode_table(struct super_block *sb, int cpu)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	int table_start;
+
+	if (cpu >= sbi->cpus)
+		return NULL;
+
+	table_start = INODE_TABLE_START;
+
+	return (struct inode_table *)((char *)nova_get_block(sb,
+		NOVA_DEF_BLOCK_SIZE_4K * table_start) +
+		cpu * CACHELINE_SIZE);
+}
+
 static inline unsigned int
 nova_inode_blk_shift(struct nova_inode_info_header *sih)
 {
@@ -197,7 +220,10 @@ static inline int nova_persist_inode(struct nova_inode *pi)
 	return 0;
 }
 
+
+int nova_init_inode_table(struct super_block *sb);
 int nova_get_inode_address(struct super_block *sb, u64 ino,
 	u64 *pi_addr, int extendable);
 struct inode *nova_iget(struct super_block *sb, unsigned long ino);
+
 #endif
