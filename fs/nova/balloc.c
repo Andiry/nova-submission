@@ -217,3 +217,21 @@ inline int nova_insert_blocktree(struct nova_sb_info *sbi,
 
 	return ret;
 }
+
+/* We do not take locks so it's inaccurate */
+unsigned long nova_count_free_blocks(struct super_block *sb)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct free_list *free_list;
+	unsigned long num_free_blocks = 0;
+	int i;
+
+	for (i = 0; i < sbi->cpus; i++) {
+		free_list = nova_get_free_list(sb, i);
+		num_free_blocks += free_list->num_free_blocks;
+	}
+
+	return num_free_blocks;
+}
+
+

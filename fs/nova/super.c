@@ -629,6 +629,24 @@ out:
 	return retval;
 }
 
+static int nova_statfs(struct dentry *d, struct kstatfs *buf)
+{
+	struct super_block *sb = d->d_sb;
+	struct nova_sb_info *sbi = (struct nova_sb_info *)sb->s_fs_info;
+
+	buf->f_type = NOVA_SUPER_MAGIC;
+	buf->f_bsize = sb->s_blocksize;
+
+	buf->f_blocks = sbi->num_blocks;
+	buf->f_bfree = buf->f_bavail = nova_count_free_blocks(sb);
+	buf->f_files = LONG_MAX;
+	buf->f_ffree = LONG_MAX - sbi->s_inodes_used_count;
+	buf->f_namelen = NOVA_NAME_LEN;
+	nova_dbg_verbose("nova_stats: total 4k free blocks 0x%llx\n",
+		buf->f_bfree);
+	return 0;
+}
+
 static int nova_show_options(struct seq_file *seq, struct dentry *root)
 {
 	struct nova_sb_info *sbi = NOVA_SB(root->d_sb);
@@ -794,6 +812,7 @@ static struct super_operations nova_sops = {
 	.alloc_inode	= nova_alloc_inode,
 	.destroy_inode	= nova_destroy_inode,
 	.put_super	= nova_put_super,
+	.statfs		= nova_statfs,
 	.remount_fs	= nova_remount,
 	.show_options	= nova_show_options,
 };
