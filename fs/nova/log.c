@@ -20,6 +20,37 @@
 #include "inode.h"
 #include "log.h"
 
+static void nova_update_setattr_entry(struct inode *inode,
+	struct nova_setattr_logentry *entry,
+	struct nova_log_entry_info *entry_info)
+{
+	struct iattr *attr = entry_info->attr;
+	unsigned int ia_valid = attr->ia_valid, attr_mask;
+
+	/* These files are in the lowest byte */
+	attr_mask = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_SIZE |
+			ATTR_ATIME | ATTR_MTIME | ATTR_CTIME;
+
+	entry->entry_type	= SET_ATTR;
+	entry->attr	= ia_valid & attr_mask;
+	entry->mode	= cpu_to_le16(inode->i_mode);
+	entry->uid	= cpu_to_le32(i_uid_read(inode));
+	entry->gid	= cpu_to_le32(i_gid_read(inode));
+	entry->atime	= cpu_to_le32(inode->i_atime.tv_sec);
+	entry->ctime	= cpu_to_le32(inode->i_ctime.tv_sec);
+	entry->mtime	= cpu_to_le32(inode->i_mtime.tv_sec);
+	entry->epoch_id = cpu_to_le64(entry_info->epoch_id);
+	entry->trans_id	= cpu_to_le64(entry_info->trans_id);
+	entry->invalid	= 0;
+
+	if (ia_valid & ATTR_SIZE)
+		entry->size = cpu_to_le64(attr->ia_size);
+	else
+		entry->size = cpu_to_le64(inode->i_size);
+
+	nova_persist_entry(entry);
+}
+
 static int nova_update_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry,
 	struct nova_log_entry_info *entry_info)
@@ -116,6 +147,7 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 			nova_update_new_dentry(sb, inode, entry, entry_info);
 		break;
 	case SET_ATTR:
+		nova_update_setattr_entry(inode, entry, entry_info);
 		break;
 	case LINK_CHANGE:
 		break;
@@ -164,6 +196,38 @@ static int nova_append_log_entry(struct super_block *sb,
 
 	entry_info->curr_p = curr_p;
 	return 0;
+}
+
+/* Returns new tail after append */
+static int nova_append_setattr_entry(struct super_block *sb,
+	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
+	struct nova_inode_update *update, u64 *last_setattr, u64 epoch_id)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_log_entry_info entry_info;
+	timing_t append_time;
+	int ret;
+
+	NOVA_START_TIMING(append_setattr_t, append_time);
+	entry_info.type = SET_ATTR;
+	entry_info.attr = attr;
+	entry_info.update = update;
+	entry_info.epoch_id = epoch_id;
+	entry_info.trans_id = sih->trans_id;
+
+	ret = nova_append_log_entry(sb, pi, inode, sih, &entry_info);
+	if (ret) {
+		nova_err(sb, "%s failed\n", __func__);
+		goto out;
+	}
+
+	*last_setattr = sih->last_setattr;
+	sih->last_setattr = entry_info.curr_p;
+
+out:
+	NOVA_END_TIMING(append_setattr_t, append_time);
+	return ret;
 }
 
 /*
