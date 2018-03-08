@@ -229,5 +229,7 @@ int nova_get_inode_address(struct super_block *sb, u64 ino,
 struct inode *nova_iget(struct super_block *sb, unsigned long ino);
 inline int nova_insert_inodetree(struct nova_sb_info *sbi,
 	struct nova_range_node *new_node, int cpu);
+extern int nova_write_inode(struct inode *inode, struct writeback_control *wbc);
+extern void nova_dirty_inode(struct inode *inode, int flags);
 
 #endif

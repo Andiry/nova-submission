@@ -861,6 +861,8 @@ static void destroy_rangenode_cache(void)
 static struct super_operations nova_sops = {
 	.alloc_inode	= nova_alloc_inode,
 	.destroy_inode	= nova_destroy_inode,
+	.write_inode	= nova_write_inode,
+	.dirty_inode	= nova_dirty_inode,
 	.put_super	= nova_put_super,
 	.statfs		= nova_statfs,
 	.remount_fs	= nova_remount,
