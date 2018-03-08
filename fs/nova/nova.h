@@ -312,6 +312,29 @@ struct nova_range_node {
 #include "bbuild.h"
 #include "balloc.h"
 
+static inline unsigned long
+nova_get_numblocks(unsigned short btype)
+{
+	unsigned long num_blocks;
+
+	if (btype == NOVA_BLOCK_TYPE_4K) {
+		num_blocks = 1;
+	} else if (btype == NOVA_BLOCK_TYPE_2M) {
+		num_blocks = 512;
+	} else {
+		//btype == NOVA_BLOCK_TYPE_1G
+		num_blocks = 0x40000;
+	}
+	return num_blocks;
+}
+
+static inline unsigned long
+nova_get_blocknr(struct super_block *sb, u64 block, unsigned short btype)
+{
+	return block >> PAGE_SHIFT;
+}
+
+
 /* ====================================================== */
 /* ==============  Function prototypes  ================= */
 /* ====================================================== */
