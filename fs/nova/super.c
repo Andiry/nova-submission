@@ -347,6 +347,9 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	struct nova_inode *root_i, *pi;
 	struct nova_super_block *super;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	timing_t init_time;
+
+	NOVA_START_TIMING(new_init_t, init_time);
 
 	nova_info("creating an empty nova of size %lu\n", size);
 	sbi->num_blocks = ((unsigned long)(size) >> PAGE_SHIFT);
@@ -357,6 +360,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 
 	if (!nova_check_size(sb, size)) {
 		nova_warn("Specified NOVA size too small 0x%lx.\n", size);
+		NOVA_END_TIMING(new_init_t, init_time);
 		return ERR_PTR(-EINVAL);
 	}
 
@@ -399,6 +403,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	PERSISTENT_MARK();
 	PERSISTENT_BARRIER();
 	nova_info("NOVA initialization finish\n");
+	NOVA_END_TIMING(new_init_t, init_time);
 	return root_i;
 }
 
@@ -473,15 +478,22 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	unsigned long blocksize;
 	u32 random = 0;
 	int retval = -EINVAL;
+	timing_t mount_time;
+
+	NOVA_START_TIMING(mount_t, mount_time);
 
 	BUILD_BUG_ON(sizeof(struct nova_super_block) > NOVA_SB_SIZE);
 
 	sbi = kzalloc(sizeof(struct nova_sb_info), GFP_KERNEL);
-	if (!sbi)
+	if (!sbi) {
+		NOVA_END_TIMING(mount_t, mount_time);
 		return -ENOMEM;
+	}
+
 	sbi->nova_sb = kzalloc(sizeof(struct nova_super_block), GFP_KERNEL);
 	if (!sbi->nova_sb) {
 		kfree(sbi);
+		NOVA_END_TIMING(mount_t, mount_time);
 		return -ENOMEM;
 	}
 
@@ -591,6 +603,7 @@ setup_sb:
 		nova_update_mount_time(sb);
 
 	retval = 0;
+	NOVA_END_TIMING(mount_t, mount_time);
 	return retval;
 
 out:
@@ -600,6 +613,7 @@ out:
 	kfree(sbi->nova_sb);
 	kfree(sbi);
 	nova_dbg("%s failed: return %d\n", __func__, retval);
+	NOVA_END_TIMING(mount_t, mount_time);
 	return retval;
 }
 
@@ -701,6 +715,9 @@ static struct file_system_type nova_fs_type = {
 static int __init init_nova_fs(void)
 {
 	int rc = 0;
+	timing_t init_time;
+
+	NOVA_START_TIMING(init_t, init_time);
 
 	nova_dbg("%s: %d cpus online\n", __func__, num_online_cpus());
 	if (arch_has_clwb())
@@ -711,17 +728,19 @@ static int __init init_nova_fs(void)
 
 	rc = init_inodecache();
 	if (rc)
-		return rc;
+		goto out;
 
 	rc = register_filesystem(&nova_fs_type);
 	if (rc)
 		goto out1;
 
+out:
+	NOVA_END_TIMING(init_t, init_time);
 	return rc;
 
 out1:
 	destroy_inodecache();
-	return rc;
+	goto out;
 }
 
 static void __exit exit_nova_fs(void)
