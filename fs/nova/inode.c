@@ -489,6 +489,39 @@ block_found:
 	return ret;
 }
 
+int nova_write_inode(struct inode *inode, struct writeback_control *wbc)
+{
+	/* write_inode should never be called because we always keep our inodes
+	 * clean. So let us know if write_inode ever gets called.
+	 */
+//	BUG();
+	return 0;
+}
+
+/*
+ * dirty_inode() is called from mark_inode_dirty_sync()
+ * usually dirty_inode should not be called because NOVA always keeps its inodes
+ * clean. Only exception is touch_atime which calls dirty_inode to update the
+ * i_atime field.
+ */
+void nova_dirty_inode(struct inode *inode, int flags)
+{
+	struct super_block *sb = inode->i_sb;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode *pi;
+
+	pi = nova_get_block(sb, sih->pi_addr);
+
+	/* only i_atime should have changed if at all.
+	 * we can do in-place atomic update
+	 */
+	pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
+	nova_persist_inode(pi);
+	/* Relax atime persistency */
+	nova_flush_buffer(&pi->i_atime, sizeof(pi->i_atime), 0);
+}
+
 static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 {
 	/* DAX does not support direct IO */
