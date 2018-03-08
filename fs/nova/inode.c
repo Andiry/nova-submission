@@ -489,6 +489,46 @@ block_found:
 	return ret;
 }
 
+/* Returns 0 on failure */
+u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct inode_map *inode_map;
+	unsigned long free_ino = 0;
+	int map_id;
+	u64 ino = 0;
+	int ret;
+	timing_t new_inode_time;
+
+	NOVA_START_TIMING(new_nova_inode_t, new_inode_time);
+	map_id = sbi->map_id;
+	sbi->map_id = (sbi->map_id + 1) % sbi->cpus;
+
+	inode_map = &sbi->inode_maps[map_id];
+
+	mutex_lock(&inode_map->inode_table_mutex);
+	ret = nova_alloc_unused_inode(sb, map_id, &free_ino);
+	if (ret) {
+		nova_dbg("%s: alloc inode number failed %d\n", __func__, ret);
+		mutex_unlock(&inode_map->inode_table_mutex);
+		return 0;
+	}
+
+	ret = nova_get_inode_address(sb, free_ino, pi_addr, 1);
+	if (ret) {
+		nova_dbg("%s: get inode address failed %d\n", __func__, ret);
+		mutex_unlock(&inode_map->inode_table_mutex);
+		return 0;
+	}
+
+	mutex_unlock(&inode_map->inode_table_mutex);
+
+	ino = free_ino;
+
+	NOVA_END_TIMING(new_nova_inode_t, new_inode_time);
+	return ino;
+}
+
 int nova_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
 	/* write_inode should never be called because we always keep our inodes
