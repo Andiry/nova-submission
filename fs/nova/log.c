@@ -51,6 +51,25 @@ static void nova_update_setattr_entry(struct inode *inode,
 	nova_persist_entry(entry);
 }
 
+static void nova_update_link_change_entry(struct inode *inode,
+	struct nova_link_change_entry *entry,
+	struct nova_log_entry_info *entry_info)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+
+	entry->entry_type	= LINK_CHANGE;
+	entry->epoch_id		= cpu_to_le64(entry_info->epoch_id);
+	entry->trans_id		= cpu_to_le64(entry_info->trans_id);
+	entry->invalid		= 0;
+	entry->links		= cpu_to_le16(inode->i_nlink);
+	entry->ctime		= cpu_to_le32(inode->i_ctime.tv_sec);
+	entry->flags		= cpu_to_le32(sih->i_flags);
+	entry->generation	= cpu_to_le32(inode->i_generation);
+
+	nova_persist_entry(entry);
+}
+
 static int nova_update_write_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry,
 	struct nova_log_entry_info *entry_info)
@@ -150,6 +169,7 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 		nova_update_setattr_entry(inode, entry, entry_info);
 		break;
 	case LINK_CHANGE:
+		nova_update_link_change_entry(inode, entry, entry_info);
 		break;
 	default:
 		break;
@@ -227,6 +247,38 @@ static int nova_append_setattr_entry(struct super_block *sb,
 
 out:
 	NOVA_END_TIMING(append_setattr_t, append_time);
+	return ret;
+}
+
+/* Returns new tail after append */
+int nova_append_link_change_entry(struct super_block *sb,
+	struct nova_inode *pi, struct inode *inode,
+	struct nova_inode_update *update, u64 *old_linkc, u64 epoch_id)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_log_entry_info entry_info;
+	int ret = 0;
+	timing_t append_time;
+
+	NOVA_START_TIMING(append_link_change_t, append_time);
+
+	entry_info.type = LINK_CHANGE;
+	entry_info.update = update;
+	entry_info.epoch_id = epoch_id;
+	entry_info.trans_id = sih->trans_id;
+
+	ret = nova_append_log_entry(sb, pi, inode, sih, &entry_info);
+	if (ret) {
+		nova_err(sb, "%s failed\n", __func__);
+		goto out;
+	}
+
+	*old_linkc = sih->last_link_change;
+	sih->last_link_change = entry_info.curr_p;
+	sih->trans_id++;
+out:
+	NOVA_END_TIMING(append_link_change_t, append_time);
 	return ret;
 }
 
