@@ -364,6 +364,9 @@ static inline int is_dir_init_entry(struct super_block *sb,
 }
 
 
+int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
+	struct inode *inode, struct nova_file_write_item *item,
+	struct nova_inode_update *update);
 int nova_append_dentry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *dir, struct dentry *dentry, u64 ino,
 	unsigned short de_len, struct nova_inode_update *update,

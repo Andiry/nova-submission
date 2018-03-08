@@ -20,6 +20,18 @@
 #include "inode.h"
 #include "log.h"
 
+static int nova_update_write_entry(struct super_block *sb,
+	struct nova_file_write_entry *entry,
+	struct nova_log_entry_info *entry_info)
+{
+	entry->epoch_id = cpu_to_le64(entry_info->epoch_id);
+	entry->trans_id = cpu_to_le64(entry_info->trans_id);
+	entry->mtime = cpu_to_le32(entry_info->time);
+	entry->size = cpu_to_le64(entry_info->file_size);
+	nova_persist_entry(entry);
+	return 0;
+}
+
 static int nova_update_old_dentry(struct super_block *sb,
 	struct inode *dir, struct nova_dentry *dentry,
 	struct nova_log_entry_info *entry_info)
@@ -91,6 +103,11 @@ static int nova_update_log_entry(struct super_block *sb, struct inode *inode,
 
 	switch (type) {
 	case FILE_WRITE:
+		if (entry_info->inplace)
+			nova_update_write_entry(sb, entry, entry_info);
+		else
+			memcpy_to_pmem_nocache(entry, entry_info->data,
+				sizeof(struct nova_file_write_entry));
 		break;
 	case DIR_LOG:
 		if (entry_info->inplace)
@@ -147,6 +164,40 @@ static int nova_append_log_entry(struct super_block *sb,
 
 	entry_info->curr_p = curr_p;
 	return 0;
+}
+
+/*
+ * Append a nova_file_write_entry to the current nova_inode_log_page.
+ * blocknr and start_blk are pgoff.
+ * We cannot update pi->log_tail here because a transaction may contain
+ * multiple entries.
+ */
+int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
+	struct inode *inode, struct nova_file_write_item *item,
+	struct nova_inode_update *update)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	struct nova_file_write_entry *data = &item->entry;
+	struct nova_log_entry_info entry_info;
+	timing_t append_time;
+	int ret;
+
+	NOVA_START_TIMING(append_file_entry_t, append_time);
+
+	entry_info.type = FILE_WRITE;
+	entry_info.update = update;
+	entry_info.data = data;
+	entry_info.epoch_id = data->epoch_id;
+	entry_info.trans_id = data->trans_id;
+	entry_info.inplace = 0;
+
+	ret = nova_append_log_entry(sb, pi, inode, sih, &entry_info);
+	if (ret)
+		nova_err(sb, "%s failed\n", __func__);
+
+	NOVA_END_TIMING(append_file_entry_t, append_time);
+	return ret;
 }
 
 int nova_append_dentry(struct super_block *sb, struct nova_inode *pi,
