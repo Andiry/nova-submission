@@ -221,6 +221,7 @@ static inline int nova_persist_inode(struct nova_inode *pi)
 }
 
 
+extern const struct address_space_operations nova_aops_dax;
 int nova_init_inode_inuse_list(struct super_block *sb);
 int nova_init_inode_table(struct super_block *sb);
 int nova_get_inode_address(struct super_block *sb, u64 ino,

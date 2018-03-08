@@ -175,6 +175,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	}
 
 	inode->i_blocks = sih->i_blocks;
+	inode->i_mapping->a_ops = &nova_aops_dax;
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
@@ -488,3 +489,26 @@ block_found:
 	return ret;
 }
 
+static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
+{
+	/* DAX does not support direct IO */
+	return -EIO;
+}
+
+static int nova_writepages(struct address_space *mapping,
+	struct writeback_control *wbc)
+{
+	int ret;
+	timing_t wp_time;
+
+	NOVA_START_TIMING(write_pages_t, wp_time);
+	ret = dax_writeback_mapping_range(mapping,
+			mapping->host->i_sb->s_bdev, wbc);
+	NOVA_END_TIMING(write_pages_t, wp_time);
+	return ret;
+}
+
+const struct address_space_operations nova_aops_dax = {
+	.writepages		= nova_writepages,
+	.direct_IO		= nova_direct_IO,
+};
