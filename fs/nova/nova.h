@@ -301,6 +301,7 @@ static inline u64 nova_get_epoch_id(struct super_block *sb)
 }
 
 #include "inode.h"
+#include "log.h"
 
 /* A node in the RB tree representing a range of pages */
 struct nova_range_node {
