@@ -230,6 +230,9 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino);
 inline int nova_insert_inodetree(struct nova_sb_info *sbi,
 	struct nova_range_node *new_node, int cpu);
 u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr);
+struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
+	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
+	size_t size, dev_t rdev, const struct qstr *qstr, u64 epoch_id);
 extern int nova_write_inode(struct inode *inode, struct writeback_control *wbc);
 extern void nova_dirty_inode(struct inode *inode, int flags);
 

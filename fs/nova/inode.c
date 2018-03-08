@@ -363,7 +363,49 @@ static inline int nova_search_inodetree(struct nova_sb_info *sbi,
 	return nova_find_range_node(sbi, tree, internal_ino, ret_node);
 }
 
-int nova_alloc_unused_inode(struct super_block *sb, int cpuid,
+static void nova_get_inode_flags(struct inode *inode, struct nova_inode *pi)
+{
+	unsigned int flags = inode->i_flags;
+	unsigned int nova_flags = le32_to_cpu(pi->i_flags);
+
+	nova_flags &= ~(FS_SYNC_FL | FS_APPEND_FL | FS_IMMUTABLE_FL |
+			 FS_NOATIME_FL | FS_DIRSYNC_FL);
+	if (flags & S_SYNC)
+		nova_flags |= FS_SYNC_FL;
+	if (flags & S_APPEND)
+		nova_flags |= FS_APPEND_FL;
+	if (flags & S_IMMUTABLE)
+		nova_flags |= FS_IMMUTABLE_FL;
+	if (flags & S_NOATIME)
+		nova_flags |= FS_NOATIME_FL;
+	if (flags & S_DIRSYNC)
+		nova_flags |= FS_DIRSYNC_FL;
+
+	pi->i_flags = cpu_to_le32(nova_flags);
+}
+
+static void nova_init_inode(struct inode *inode, struct nova_inode *pi)
+{
+	pi->i_mode = cpu_to_le16(inode->i_mode);
+	pi->i_uid = cpu_to_le32(i_uid_read(inode));
+	pi->i_gid = cpu_to_le32(i_gid_read(inode));
+	pi->i_links_count = cpu_to_le16(inode->i_nlink);
+	pi->i_size = cpu_to_le64(inode->i_size);
+	pi->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
+	pi->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	pi->i_generation = cpu_to_le32(inode->i_generation);
+	pi->log_head = 0;
+	pi->log_tail = 0;
+	pi->deleted = 0;
+	pi->delete_epoch_id = 0;
+	nova_get_inode_flags(inode, pi);
+
+	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
+		pi->dev.rdev = cpu_to_le32(inode->i_rdev);
+}
+
+static int nova_alloc_unused_inode(struct super_block *sb, int cpuid,
 	unsigned long *ino)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
@@ -527,6 +569,106 @@ u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr)
 
 	NOVA_END_TIMING(new_nova_inode_t, new_inode_time);
 	return ino;
+}
+
+struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
+	struct inode *dir, u64 pi_addr, u64 ino, umode_t mode,
+	size_t size, dev_t rdev, const struct qstr *qstr, u64 epoch_id)
+{
+	struct super_block *sb;
+	struct nova_sb_info *sbi;
+	struct inode *inode;
+	struct nova_inode *diri = NULL;
+	struct nova_inode_info *si;
+	struct nova_inode_info_header *sih = NULL;
+	struct nova_inode *pi;
+	int errval;
+	timing_t new_inode_time;
+
+	NOVA_START_TIMING(new_vfs_inode_t, new_inode_time);
+	sb = dir->i_sb;
+	sbi = (struct nova_sb_info *)sb->s_fs_info;
+	inode = new_inode(sb);
+	if (!inode) {
+		errval = -ENOMEM;
+		goto fail2;
+	}
+
+	inode_init_owner(inode, dir, mode);
+	inode->i_blocks = inode->i_size = 0;
+	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
+
+	inode->i_generation = atomic_add_return(1, &sbi->next_generation);
+	inode->i_size = size;
+
+	diri = nova_get_inode(sb, dir);
+	if (!diri) {
+		errval = -EACCES;
+		goto fail1;
+	}
+
+	pi = (struct nova_inode *)nova_get_block(sb, pi_addr);
+	nova_dbg_verbose("%s: allocating inode %llu @ 0x%llx\n",
+					__func__, ino, pi_addr);
+
+	/* chosen inode is in ino */
+	inode->i_ino = ino;
+
+	switch (type) {
+	case TYPE_CREATE:
+		inode->i_mapping->a_ops = &nova_aops_dax;
+		break;
+	case TYPE_MKNOD:
+		init_special_inode(inode, mode, rdev);
+		break;
+	case TYPE_SYMLINK:
+		inode->i_mapping->a_ops = &nova_aops_dax;
+		break;
+	case TYPE_MKDIR:
+		inode->i_mapping->a_ops = &nova_aops_dax;
+		set_nlink(inode, 2);
+		break;
+	default:
+		nova_dbg("Unknown new inode type %d\n", type);
+		break;
+	}
+
+	/*
+	 * Pi is part of the dir log so no transaction is needed,
+	 * but we need to flush to NVMM.
+	 */
+	pi->i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
+	pi->i_flags = nova_mask_flags(mode, diri->i_flags);
+	pi->nova_ino = ino;
+	pi->i_create_time = current_time(inode).tv_sec;
+	pi->create_epoch_id = epoch_id;
+	nova_init_inode(inode, pi);
+
+	si = NOVA_I(inode);
+	sih = &si->header;
+	nova_init_header(sb, sih, inode->i_mode);
+	sih->pi_addr = pi_addr;
+	sih->ino = ino;
+	sih->i_blk_type = NOVA_DEFAULT_BLOCK_TYPE;
+
+	nova_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
+	sih->i_flags = le32_to_cpu(pi->i_flags);
+
+	if (insert_inode_locked(inode) < 0) {
+		nova_err(sb, "nova_new_inode failed ino %lx\n", inode->i_ino);
+		errval = -EINVAL;
+		goto fail1;
+	}
+
+	nova_flush_buffer(pi, NOVA_INODE_SIZE, 0);
+	NOVA_END_TIMING(new_vfs_inode_t, new_inode_time);
+	return inode;
+fail1:
+	make_bad_inode(inode);
+	iput(inode);
+fail2:
+	NOVA_END_TIMING(new_vfs_inode_t, new_inode_time);
+	return ERR_PTR(errval);
 }
 
 int nova_write_inode(struct inode *inode, struct writeback_control *wbc)
