@@ -364,6 +364,9 @@ static inline int is_dir_init_entry(struct super_block *sb,
 }
 
 
+int nova_append_link_change_entry(struct super_block *sb,
+	struct nova_inode *pi, struct inode *inode,
+	struct nova_inode_update *update, u64 *old_linkc, u64 epoch_id);
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_item *item,
 	struct nova_inode_update *update);
