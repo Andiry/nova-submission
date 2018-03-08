@@ -376,6 +376,8 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	pi->nova_ino = NOVA_BLOCKNODE_INO;
 	nova_flush_buffer(pi, CACHELINE_SIZE, 1);
 
+	nova_init_blockmap(sb, 0);
+
 	sbi->nova_sb->s_size = cpu_to_le64(size);
 	sbi->nova_sb->s_blocksize = cpu_to_le32(blocksize);
 	sbi->nova_sb->s_magic = cpu_to_le32(NOVA_SUPER_MAGIC);
