@@ -167,18 +167,81 @@ bad_inode:
 	return ret;
 }
 
-/* Get the address in PMEM of an inode by inode number.  Allocate additional
+/*
+ * Get the address in PMEM of an inode by inode number.  Allocate additional
  * block to store additional inodes if necessary.
  */
 int nova_get_inode_address(struct super_block *sb, u64 ino,
 	u64 *pi_addr, int extendable)
 {
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_inode_info_header sih;
+	struct inode_table *inode_table;
+	unsigned int data_bits;
+	unsigned int num_inodes_bits;
+	u64 curr;
+	unsigned int superpage_count;
+	u64 internal_ino;
+	int cpuid;
+	int extended = 0;
+	unsigned int index;
+	unsigned int i = 0;
+	unsigned long blocknr;
+	unsigned long curr_addr;
+	int allocated;
+
 	if (ino < NOVA_NORMAL_INODE_START) {
 		*pi_addr = nova_get_reserved_inode_addr(sb, ino);
 		return 0;
 	}
 
-	*pi_addr = 0;
+	sih.ino = NOVA_INODETABLE_INO;
+	sih.i_blk_type = NOVA_BLOCK_TYPE_2M;
+	data_bits = blk_type_to_shift[sih.i_blk_type];
+	num_inodes_bits = data_bits - NOVA_INODE_BITS;
+
+	cpuid = ino % sbi->cpus;
+	internal_ino = ino / sbi->cpus;
+
+	inode_table = nova_get_inode_table(sb, cpuid);
+	superpage_count = internal_ino >> num_inodes_bits;
+	index = internal_ino & ((1 << num_inodes_bits) - 1);
+
+	curr = inode_table->log_head;
+	if (curr == 0)
+		return -EINVAL;
+
+	for (i = 0; i < superpage_count; i++) {
+		if (curr == 0)
+			return -EINVAL;
+
+		curr_addr = (unsigned long)nova_get_block(sb, curr);
+		/* Next page pointer in the last 8 bytes of the superpage */
+		curr_addr += nova_inode_blk_size(&sih) - 8;
+		curr = *(u64 *)(curr_addr);
+
+		if (curr == 0) {
+			if (extendable == 0)
+				return -EINVAL;
+
+			extended = 1;
+
+			allocated = nova_new_log_blocks(sb, &sih, &blocknr,
+				1, ALLOC_INIT_ZERO, cpuid, ALLOC_FROM_HEAD);
+
+			if (allocated != 1)
+				return allocated;
+
+			curr = nova_get_block_off(sb, blocknr,
+						NOVA_BLOCK_TYPE_2M);
+			*(u64 *)(curr_addr) = curr;
+			nova_flush_buffer((void *)curr_addr,
+						NOVA_INODE_SIZE, 1);
+		}
+	}
+
+	*pi_addr = curr + index * NOVA_INODE_SIZE;
+
 	return 0;
 }
 
