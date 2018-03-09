@@ -193,6 +193,52 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 
 }
 
+/* search the radix tree to find hole or data
+ * in the specified range
+ * Input:
+ * first_blocknr: first block in the specified range
+ * last_blocknr: last_blocknr in the specified range
+ * @data_found: indicates whether data blocks were found
+ * @hole_found: indicates whether a hole was found
+ * hole: whether we are looking for a hole or data
+ */
+static int nova_lookup_hole_in_range(struct super_block *sb,
+	struct nova_inode_info_header *sih,
+	unsigned long first_blocknr, unsigned long last_blocknr,
+	int *data_found, int *hole_found, int hole)
+{
+	struct nova_file_write_entry *entry;
+	unsigned long blocks = 0;
+	unsigned long pgoff, old_pgoff;
+
+	pgoff = first_blocknr;
+	while (pgoff <= last_blocknr) {
+		old_pgoff = pgoff;
+		entry = radix_tree_lookup(&sih->tree, pgoff);
+		if (entry) {
+			*data_found = 1;
+			if (!hole)
+				goto done;
+			pgoff++;
+		} else {
+			*hole_found = 1;
+			entry = nova_find_next_entry(sb, sih, pgoff);
+			pgoff++;
+			if (entry) {
+				pgoff = pgoff > entry->pgoff ?
+					pgoff : entry->pgoff;
+				if (pgoff > last_blocknr)
+					pgoff = last_blocknr + 1;
+			}
+		}
+
+		if (!*hole_found || !hole)
+			blocks += pgoff - old_pgoff;
+	}
+done:
+	return blocks;
+}
+
 /* copy persistent state to struct inode */
 static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	u64 pi_addr)
@@ -232,6 +278,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
 		inode->i_op = &nova_file_inode_operations;
+		inode->i_fop = &nova_dax_file_operations;
 		break;
 	case S_IFDIR:
 		inode->i_op = &nova_dir_inode_operations;
@@ -929,6 +976,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	case TYPE_CREATE:
 		inode->i_op = &nova_file_inode_operations;
 		inode->i_mapping->a_ops = &nova_aops_dax;
+		inode->i_fop = &nova_dax_file_operations;
 		break;
 	case TYPE_MKNOD:
 		init_special_inode(inode, mode, rdev);
@@ -1168,6 +1216,71 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 out:
 	NOVA_END_TIMING(setattr_t, setattr_time);
 	return ret;
+}
+
+/*
+ * find the file offset for SEEK_DATA/SEEK_HOLE
+ */
+unsigned long nova_find_region(struct inode *inode, loff_t *offset, int hole)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
+	unsigned long first_blocknr, last_blocknr;
+	unsigned long blocks = 0, offset_in_block;
+	int data_found = 0, hole_found = 0;
+
+	if (*offset >= inode->i_size)
+		return -ENXIO;
+
+	if (!inode->i_blocks || !sih->i_size) {
+		if (hole)
+			return inode->i_size;
+		else
+			return -ENXIO;
+	}
+
+	offset_in_block = *offset & ((1UL << data_bits) - 1);
+
+	first_blocknr = *offset >> data_bits;
+	last_blocknr = inode->i_size >> data_bits;
+
+	nova_dbgv("find_region offset %llx, first_blocknr %lx, last_blocknr %lx hole %d\n",
+		  *offset, first_blocknr, last_blocknr, hole);
+
+	blocks = nova_lookup_hole_in_range(inode->i_sb, sih,
+		first_blocknr, last_blocknr, &data_found, &hole_found, hole);
+
+	/* Searching data but only hole found till the end */
+	if (!hole && !data_found && hole_found)
+		return -ENXIO;
+
+	if (data_found && !hole_found) {
+		/* Searching data but we are already into them */
+		if (hole)
+			/* Searching hole but only data found, go to the end */
+			*offset = inode->i_size;
+		return 0;
+	}
+
+	/* Searching for hole, hole found and starting inside an hole */
+	if (hole && hole_found && !blocks) {
+		/* we found data after it */
+		if (!data_found)
+			/* last hole */
+			*offset = inode->i_size;
+		return 0;
+	}
+
+	if (offset_in_block) {
+		blocks--;
+		*offset += (blocks << data_bits) +
+			   ((1 << data_bits) - offset_in_block);
+	} else {
+		*offset += blocks << data_bits;
+	}
+
+	return 0;
 }
 
 static ssize_t nova_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
