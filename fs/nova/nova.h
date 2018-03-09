@@ -515,6 +515,13 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 extern const struct file_operations nova_dax_file_operations;
 extern const struct inode_operations nova_file_inode_operations;
 
+
+/* gc.c */
+int nova_inode_log_fast_gc(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	u64 curr_tail, u64 new_block, int num_pages,
+	int force_thorough);
+
 /* ioctl.c */
 extern long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 #ifdef CONFIG_COMPAT

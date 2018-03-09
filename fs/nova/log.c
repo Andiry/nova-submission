@@ -964,6 +964,9 @@ static u64 nova_extend_inode_log(struct super_block *sb, struct nova_inode *pi,
 	}
 
 	/* Perform GC */
+	nova_inode_log_fast_gc(sb, pi, sih, curr_p,
+			       new_block, allocated, 0);
+
 	return new_block;
 }
 
