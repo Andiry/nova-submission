@@ -231,6 +231,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
+		inode->i_op = &nova_file_inode_operations;
 		break;
 	case S_IFDIR:
 		inode->i_op = &nova_dir_inode_operations;
@@ -926,6 +927,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 
 	switch (type) {
 	case TYPE_CREATE:
+		inode->i_op = &nova_file_inode_operations;
 		inode->i_mapping->a_ops = &nova_aops_dax;
 		break;
 	case TYPE_MKNOD:
@@ -1087,6 +1089,29 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize,
 	nova_truncate_file_blocks(inode, newsize, oldsize, epoch_id);
 	sih_unlock(sih);
 	NOVA_END_TIMING(setsize_t, setsize_time);
+}
+
+int nova_getattr(const struct path *path, struct kstat *stat,
+		 u32 request_mask, unsigned int query_flags)
+{
+	struct inode *inode = d_inode(path->dentry);
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	unsigned int flags = sih->i_flags;
+
+	if (flags & FS_APPEND_FL)
+		stat->attributes |= STATX_ATTR_APPEND;
+	if (flags & FS_COMPR_FL)
+		stat->attributes |= STATX_ATTR_COMPRESSED;
+	if (flags & FS_IMMUTABLE_FL)
+		stat->attributes |= STATX_ATTR_IMMUTABLE;
+	if (flags & FS_NODUMP_FL)
+		stat->attributes |= STATX_ATTR_NODUMP;
+
+	generic_fillattr(inode, stat);
+	/* stat->blocks should be the number of 512B blocks */
+	stat->blocks = (inode->i_blocks << inode->i_sb->s_blocksize_bits) >> 9;
+	return 0;
 }
 
 int nova_notify_change(struct dentry *dentry, struct iattr *attr)
