@@ -546,6 +546,12 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, const char *symname, int len, u64 epoch_id);
 extern const struct inode_operations nova_symlink_inode_operations;
 
+/* sysfs.c */
+extern const char *proc_dirname;
+extern struct proc_dir_entry *nova_proc_root;
+void nova_sysfs_init(struct super_block *sb);
+void nova_sysfs_exit(struct super_block *sb);
+
 /* stats.c */
 void nova_get_timing_stats(void);
 void nova_get_IO_stats(void);
