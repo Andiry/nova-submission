@@ -398,4 +398,9 @@ int nova_free_contiguous_log_blocks(struct super_block *sb,
 int nova_free_inode_log(struct super_block *sb, struct nova_inode *pi,
 	struct nova_inode_info_header *sih);
 
+void nova_print_nova_log(struct super_block *sb,
+	struct nova_inode_info_header *sih);
+void nova_print_nova_log_pages(struct super_block *sb,
+	struct nova_inode_info_header *sih);
+
 #endif

@@ -102,6 +102,50 @@ static inline int nova_invalidate_write_entry(struct super_block *sb,
 							reassign, num_free);
 }
 
+unsigned int nova_free_old_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih,
+	struct nova_file_write_entry *entry,
+	unsigned long pgoff, unsigned int num_free,
+	bool delete_dead, u64 epoch_id)
+{
+	unsigned long old_nvmm;
+	timing_t free_time;
+
+	if (!entry)
+		return 0;
+
+	NOVA_START_TIMING(free_old_t, free_time);
+
+	old_nvmm = get_nvmm(sb, sih, entry, pgoff);
+
+	if (!delete_dead)
+		nova_invalidate_write_entry(sb, entry, 1, num_free);
+
+	nova_dbgv("%s: pgoff %lu, free %u blocks\n",
+				__func__, pgoff, num_free);
+	nova_free_data_blocks(sb, sih, old_nvmm, num_free);
+
+	sih->i_blocks -= num_free;
+
+	NOVA_END_TIMING(free_old_t, free_time);
+	return num_free;
+}
+
+struct nova_file_write_entry *nova_find_next_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih, pgoff_t pgoff)
+{
+	struct nova_file_write_entry *entry = NULL;
+	struct nova_file_write_entry *entries[1];
+	int nr_entries;
+
+	nr_entries = radix_tree_gang_lookup(&sih->tree,
+					(void **)entries, pgoff, 1);
+	if (nr_entries == 1)
+		entry = entries[0];
+
+	return entry;
+}
+
 static void nova_update_setattr_entry(struct inode *inode,
 	struct nova_setattr_logentry *entry,
 	struct nova_log_entry_info *entry_info)
@@ -565,6 +609,70 @@ int nova_append_link_change_entry(struct super_block *sb,
 	sih->trans_id++;
 out:
 	NOVA_END_TIMING(append_link_change_t, append_time);
+	return ret;
+}
+
+int nova_assign_write_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih,
+	struct nova_file_write_entry *entry,
+	bool free)
+{
+	struct nova_file_write_entry *old_entry;
+	struct nova_file_write_entry *start_old_entry = NULL;
+	void **pentry;
+	unsigned long start_pgoff = entry->pgoff;
+	unsigned long start_old_pgoff = 0;
+	unsigned int num = entry->num_pages;
+	unsigned int num_free = 0;
+	unsigned long curr_pgoff;
+	int i;
+	int ret = 0;
+	timing_t assign_time;
+
+	NOVA_START_TIMING(assign_t, assign_time);
+	for (i = 0; i < num; i++) {
+		curr_pgoff = start_pgoff + i;
+
+		pentry = radix_tree_lookup_slot(&sih->tree, curr_pgoff);
+		if (pentry) {
+			old_entry = radix_tree_deref_slot(pentry);
+			if (old_entry != start_old_entry) {
+				if (start_old_entry && free)
+					nova_free_old_entry(sb, sih,
+							start_old_entry,
+							start_old_pgoff,
+							num_free, false,
+							entry->epoch_id);
+				nova_invalidate_write_entry(sb,
+						start_old_entry, 1, 0);
+
+				start_old_entry = old_entry;
+				start_old_pgoff = curr_pgoff;
+				num_free = 1;
+			} else {
+				num_free++;
+			}
+
+			radix_tree_replace_slot(&sih->tree, pentry, entry);
+		} else {
+			ret = radix_tree_insert(&sih->tree, curr_pgoff, entry);
+			if (ret) {
+				nova_dbg("%s: ERROR %d\n", __func__, ret);
+				goto out;
+			}
+		}
+	}
+
+	if (start_old_entry && free)
+		nova_free_old_entry(sb, sih, start_old_entry,
+					start_old_pgoff, num_free, false,
+					entry->epoch_id);
+
+	nova_invalidate_write_entry(sb, start_old_entry, 1, 0);
+
+out:
+	NOVA_END_TIMING(assign_t, assign_time);
+
 	return ret;
 }
 

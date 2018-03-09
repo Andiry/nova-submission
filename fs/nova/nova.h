@@ -342,6 +342,70 @@ static inline int old_entry_freeable(struct super_block *sb, u64 epoch_id)
 
 #include "balloc.h"
 
+static inline struct nova_file_write_entry *
+nova_get_write_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr)
+{
+	struct nova_file_write_entry *entry;
+
+	entry = radix_tree_lookup(&sih->tree, blocknr);
+
+	return entry;
+}
+
+
+/*
+ * Find data at a file offset (pgoff) in the data pointed to by a write log
+ * entry.
+ */
+static inline unsigned long get_nvmm(struct super_block *sb,
+	struct nova_inode_info_header *sih,
+	struct nova_file_write_entry *entry, unsigned long pgoff)
+{
+	/* entry is already verified before this call and resides in dram
+	 * or we can do memcpy_mcsafe here but have to avoid double copy and
+	 * verification of the entry.
+	 */
+	if (entry->pgoff > pgoff || (unsigned long) entry->pgoff +
+			(unsigned long) entry->num_pages <= pgoff) {
+		struct nova_sb_info *sbi = NOVA_SB(sb);
+		u64 curr;
+
+		curr = nova_get_addr_off(sbi, entry);
+		nova_dbg("Entry ERROR: inode %lu, curr 0x%llx, pgoff %lu, entry pgoff %llu, num %u\n",
+			sih->ino,
+			curr, pgoff, entry->pgoff, entry->num_pages);
+		nova_print_nova_log_pages(sb, sih);
+		nova_print_nova_log(sb, sih);
+		NOVA_ASSERT(0);
+	}
+
+	return (unsigned long) (entry->block >> PAGE_SHIFT) + pgoff
+		- entry->pgoff;
+}
+
+static inline u64 nova_find_nvmm_block(struct super_block *sb,
+	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
+	unsigned long blocknr)
+{
+	unsigned long nvmm;
+	struct nova_file_write_entry *entryc, entry_copy;
+
+	if (!entry) {
+		entry = nova_get_write_entry(sb, sih, blocknr);
+		if (!entry)
+			return 0;
+	}
+
+	entryc = &entry_copy;
+	if (memcpy_mcsafe(entryc, entry,
+			sizeof(struct nova_file_write_entry)) < 0)
+		return 0;
+
+	nvmm = get_nvmm(sb, sih, entryc, blocknr);
+	return nvmm << PAGE_SHIFT;
+}
+
 static inline unsigned long
 nova_get_numblocks(unsigned short btype)
 {
