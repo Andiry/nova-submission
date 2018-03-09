@@ -642,6 +642,9 @@ setup_sb:
 	sb->s_xattr = NULL;
 	sb->s_flags |= MS_NOSEC;
 
+	if ((sbi->s_mount_opt & NOVA_MOUNT_FORMAT) == 0)
+		nova_recovery(sb);
+
 	root_i = nova_iget(sb, NOVA_ROOT_INO);
 	if (IS_ERR(root_i)) {
 		retval = PTR_ERR(root_i);
