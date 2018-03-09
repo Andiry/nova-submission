@@ -328,6 +328,18 @@ struct inode_map {
 	int			freed;
 };
 
+
+/* Old entry is freeable if it is appended after the latest snapshot */
+static inline int old_entry_freeable(struct super_block *sb, u64 epoch_id)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	if (epoch_id == sbi->s_epoch_id)
+		return 1;
+
+	return 0;
+}
+
 #include "balloc.h"
 
 static inline unsigned long

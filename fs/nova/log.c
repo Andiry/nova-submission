@@ -20,6 +20,88 @@
 #include "inode.h"
 #include "log.h"
 
+static int nova_execute_invalidate_reassign_logentry(struct super_block *sb,
+	void *entry, enum nova_entry_type type, int reassign,
+	unsigned int num_free)
+{
+	struct nova_file_write_entry *fw_entry;
+	int invalid = 0;
+
+	switch (type) {
+	case FILE_WRITE:
+		fw_entry = (struct nova_file_write_entry *)entry;
+		if (reassign)
+			fw_entry->reassigned = 1;
+		if (num_free)
+			fw_entry->invalid_pages += num_free;
+		if (fw_entry->invalid_pages == fw_entry->num_pages)
+			invalid = 1;
+		break;
+	case DIR_LOG:
+		if (reassign) {
+			((struct nova_dentry *)entry)->reassigned = 1;
+		} else {
+			((struct nova_dentry *)entry)->invalid = 1;
+			invalid = 1;
+		}
+		break;
+	case SET_ATTR:
+		((struct nova_setattr_logentry *)entry)->invalid = 1;
+		invalid = 1;
+		break;
+	case LINK_CHANGE:
+		((struct nova_link_change_entry *)entry)->invalid = 1;
+		invalid = 1;
+		break;
+	default:
+		break;
+	}
+
+	if (invalid) {
+		u64 addr = nova_get_addr_off(NOVA_SB(sb), entry);
+
+		nova_inc_page_invalid_entries(sb, addr);
+	}
+
+	nova_persist_entry(entry);
+	return 0;
+}
+
+static int nova_invalidate_reassign_logentry(struct super_block *sb,
+	void *entry, enum nova_entry_type type, int reassign,
+	unsigned int num_free)
+{
+	nova_execute_invalidate_reassign_logentry(sb, entry, type,
+						reassign, num_free);
+	return 0;
+}
+
+static int nova_invalidate_logentry(struct super_block *sb, void *entry,
+	enum nova_entry_type type, unsigned int num_free)
+{
+	return nova_invalidate_reassign_logentry(sb, entry, type, 0, num_free);
+}
+
+static int nova_reassign_logentry(struct super_block *sb, void *entry,
+	enum nova_entry_type type)
+{
+	return nova_invalidate_reassign_logentry(sb, entry, type, 1, 0);
+}
+
+static inline int nova_invalidate_write_entry(struct super_block *sb,
+	struct nova_file_write_entry *entry, int reassign,
+	unsigned int num_free)
+{
+	if (!entry)
+		return 0;
+
+	if (num_free == 0 && entry->reassigned == 1)
+		return 0;
+
+	return nova_invalidate_reassign_logentry(sb, entry, FILE_WRITE,
+							reassign, num_free);
+}
+
 static void nova_update_setattr_entry(struct inode *inode,
 	struct nova_setattr_logentry *entry,
 	struct nova_log_entry_info *entry_info)
@@ -279,6 +361,27 @@ out:
 	return ret;
 }
 
+/* Invalidate old setattr entry */
+static int nova_invalidate_setattr_entry(struct super_block *sb,
+	u64 last_setattr)
+{
+	struct nova_setattr_logentry *old_entry;
+	void *addr;
+	int ret;
+
+	addr = (void *)nova_get_block(sb, last_setattr);
+	old_entry = (struct nova_setattr_logentry *)addr;
+
+	/* Do not invalidate setsize entries */
+	if (!old_entry_freeable(sb, old_entry->epoch_id) ||
+			(old_entry->attr & ATTR_SIZE))
+		return 0;
+
+	ret = nova_invalidate_logentry(sb, old_entry, SET_ATTR, 0);
+
+	return ret;
+}
+
 static int nova_can_inplace_update_setattr(struct super_block *sb,
 	struct nova_inode_info_header *sih, u64 epoch_id)
 {
@@ -358,7 +461,33 @@ int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 		nova_update_inode(sb, inode, pi, &update);
 	}
 
+	/* Invalidate old setattr entry */
+	if (last_setattr)
+		nova_invalidate_setattr_entry(sb, last_setattr);
+
 	return 0;
+}
+
+/* Invalidate old link change entry */
+int nova_invalidate_link_change_entry(struct super_block *sb,
+	u64 old_link_change)
+{
+	struct nova_link_change_entry *old_entry;
+	void *addr;
+	int ret;
+
+	if (old_link_change == 0)
+		return 0;
+
+	addr = (void *)nova_get_block(sb, old_link_change);
+	old_entry = (struct nova_link_change_entry *)addr;
+
+	if (!old_entry_freeable(sb, old_entry->epoch_id))
+		return 0;
+
+	ret = nova_invalidate_logentry(sb, old_entry, LINK_CHANGE, 0);
+
+	return ret;
 }
 
 static int nova_can_inplace_update_lcentry(struct super_block *sb,
@@ -478,6 +607,37 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 		nova_err(sb, "%s failed\n", __func__);
 
 	NOVA_END_TIMING(append_file_entry_t, append_time);
+	return ret;
+}
+
+/* Create dentry and delete dentry must be invalidated together */
+int nova_invalidate_dentries(struct super_block *sb,
+	struct nova_inode_update *update)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct nova_dentry *create_dentry;
+	struct nova_dentry *delete_dentry;
+	u64 create_curr, delete_curr;
+	int ret;
+
+	create_dentry = update->create_dentry;
+	delete_dentry = update->delete_dentry;
+
+	if (!create_dentry)
+		return 0;
+
+	nova_reassign_logentry(sb, create_dentry, DIR_LOG);
+
+	if (!old_entry_freeable(sb, create_dentry->epoch_id))
+		return 0;
+
+	create_curr = nova_get_addr_off(sbi, create_dentry);
+	delete_curr = nova_get_addr_off(sbi, delete_dentry);
+
+	nova_invalidate_logentry(sb, create_dentry, DIR_LOG, 0);
+
+	ret = nova_invalidate_logentry(sb, delete_dentry, DIR_LOG, 0);
+
 	return ret;
 }
 
