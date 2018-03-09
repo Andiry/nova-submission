@@ -771,3 +771,8 @@ const struct inode_operations nova_dir_inode_operations = {
 	.setattr	= nova_notify_change,
 	.get_acl	= NULL,
 };
+
+const struct inode_operations nova_special_inode_operations = {
+	.setattr	= nova_notify_change,
+	.get_acl	= NULL,
+};

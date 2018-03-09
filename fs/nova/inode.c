@@ -239,6 +239,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	case S_IFLNK:
 		break;
 	default:
+		inode->i_op = &nova_special_inode_operations;
 		init_special_inode(inode, inode->i_mode,
 				   le32_to_cpu(pi->dev.rdev));
 		break;
@@ -929,6 +930,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 		break;
 	case TYPE_MKNOD:
 		init_special_inode(inode, mode, rdev);
+		inode->i_op = &nova_special_inode_operations;
 		break;
 	case TYPE_SYMLINK:
 		inode->i_mapping->a_ops = &nova_aops_dax;

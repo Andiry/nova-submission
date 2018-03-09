@@ -486,6 +486,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 
 /* namei.c */
 extern const struct inode_operations nova_dir_inode_operations;
+extern const struct inode_operations nova_special_inode_operations;
 extern struct dentry *nova_get_parent(struct dentry *child);
 
 /* rebuild.c */
