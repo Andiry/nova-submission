@@ -484,6 +484,9 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 int nova_remove_dentry(struct dentry *dentry, int dec_link,
 	struct nova_inode_update *update, u64 epoch_id);
 
+/* file.c */
+extern const struct inode_operations nova_file_inode_operations;
+
 /* namei.c */
 extern const struct inode_operations nova_dir_inode_operations;
 extern const struct inode_operations nova_special_inode_operations;
