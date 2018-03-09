@@ -477,6 +477,11 @@ void nova_init_file_write_item(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_item *item,
 	u64 epoch_id, u64 pgoff, int num_pages, u64 blocknr, u32 time,
 	u64 file_size);
+unsigned long nova_check_existing_entry(struct super_block *sb,
+	struct inode *inode, unsigned long num_blocks, unsigned long start_blk,
+	struct nova_file_write_entry **ret_entry,
+	int check_next, u64 epoch_id,
+	int *inplace);
 ssize_t nova_inplace_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos);
 ssize_t do_nova_inplace_file_write(struct file *filp, const char __user *buf,
