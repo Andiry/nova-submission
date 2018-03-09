@@ -267,5 +267,6 @@ int nova_delete_file_tree(struct super_block *sb,
 extern void nova_evict_inode(struct inode *inode);
 extern int nova_write_inode(struct inode *inode, struct writeback_control *wbc);
 extern void nova_dirty_inode(struct inode *inode, int flags);
+extern int nova_notify_change(struct dentry *dentry, struct iattr *attr);
 
 #endif
