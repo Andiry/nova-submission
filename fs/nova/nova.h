@@ -487,6 +487,9 @@ ssize_t nova_inplace_file_write(struct file *filp, const char __user *buf,
 ssize_t do_nova_inplace_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos);
 
+extern const struct iomap_ops nova_iomap_ops;
+
+
 /* dir.c */
 extern const struct file_operations nova_dir_operations;
 int nova_insert_dir_radix_tree(struct super_block *sb,
