@@ -43,9 +43,13 @@
 
 int measure_timing;
 int support_clwb;
+int inplace_data_updates;
 
 module_param(measure_timing, int, 0444);
 MODULE_PARM_DESC(measure_timing, "Timing measurement");
+
+module_param(inplace_data_updates, int, 0444);
+MODULE_PARM_DESC(inplace_data_updates, "Perform data updates in-place (i.e., not atomically)");
 
 module_param(nova_dbgmask, int, 0444);
 MODULE_PARM_DESC(nova_dbgmask, "Control debugging output");
@@ -541,7 +545,8 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
-	nova_dbg("measure timing %d\n", measure_timing);
+	nova_dbg("measure timing %d, inplace data update %d\n",
+			measure_timing, inplace_data_updates);
 
 	get_random_bytes(&random, sizeof(u32));
 	atomic_set(&sbi->next_generation, random);
