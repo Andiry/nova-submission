@@ -714,7 +714,11 @@ const struct file_operations nova_dax_file_operations = {
 	.open		= nova_open,
 	.fsync		= nova_fsync,
 	.flush		= nova_flush,
+	.unlocked_ioctl	= nova_ioctl,
 	.fallocate	= nova_fallocate,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl	= nova_compat_ioctl,
+#endif
 };
 
 const struct inode_operations nova_file_inode_operations = {

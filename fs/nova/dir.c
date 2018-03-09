@@ -513,4 +513,8 @@ const struct file_operations nova_dir_operations = {
 	.read		= generic_read_dir,
 	.iterate	= nova_readdir,
 	.fsync		= noop_fsync,
+	.unlocked_ioctl = nova_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl	= nova_compat_ioctl,
+#endif
 };
