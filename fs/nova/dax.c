@@ -915,3 +915,56 @@ const struct iomap_ops nova_iomap_ops = {
 	.iomap_begin	= nova_iomap_begin,
 	.iomap_end	= nova_iomap_end,
 };
+
+
+/* TODO: Hugemap mmap */
+static int nova_dax_huge_fault(struct vm_fault *vmf,
+	enum page_entry_size pe_size)
+{
+	int ret = 0;
+	timing_t fault_time;
+	struct address_space *mapping = vmf->vma->vm_file->f_mapping;
+	struct inode *inode = mapping->host;
+
+	NOVA_START_TIMING(pmd_fault_t, fault_time);
+
+	nova_dbgv("%s: inode %lu, pgoff %lu\n",
+		  __func__, inode->i_ino, vmf->pgoff);
+
+	if (vmf->flags & FAULT_FLAG_WRITE)
+		file_update_time(vmf->vma->vm_file);
+
+	ret = dax_iomap_fault(vmf, pe_size, NULL, NULL, &nova_iomap_ops);
+
+	NOVA_END_TIMING(pmd_fault_t, fault_time);
+	return ret;
+}
+
+static int nova_dax_fault(struct vm_fault *vmf)
+{
+	struct address_space *mapping = vmf->vma->vm_file->f_mapping;
+	struct inode *inode = mapping->host;
+
+	nova_dbgv("%s: inode %lu, pgoff %lu, flags 0x%x\n",
+		  __func__, inode->i_ino, vmf->pgoff, vmf->flags);
+
+	return nova_dax_huge_fault(vmf, PE_SIZE_PTE);
+}
+
+static int nova_dax_pfn_mkwrite(struct vm_fault *vmf)
+{
+	struct address_space *mapping = vmf->vma->vm_file->f_mapping;
+	struct inode *inode = mapping->host;
+
+	nova_dbgv("%s: inode %lu, pgoff %lu, flags 0x%x\n",
+		  __func__, inode->i_ino, vmf->pgoff, vmf->flags);
+
+	return nova_dax_huge_fault(vmf, PE_SIZE_PTE);
+}
+
+const struct vm_operations_struct nova_dax_vm_ops = {
+	.fault	= nova_dax_fault,
+	.huge_fault = nova_dax_huge_fault,
+	.page_mkwrite = nova_dax_fault,
+	.pfn_mkwrite = nova_dax_pfn_mkwrite,
+};

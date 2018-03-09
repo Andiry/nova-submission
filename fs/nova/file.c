@@ -617,10 +617,35 @@ static ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 }
 
 
+static int nova_dax_file_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	struct inode *inode = file->f_mapping->host;
+
+	file_accessed(file);
+
+	vma->vm_flags |= VM_MIXEDMAP;
+
+	vma->vm_ops = &nova_dax_vm_ops;
+
+	nova_dbg_mmap4k("[%s:%d] inode %lu, MMAP 4KPAGE vm_start(0x%lx), "
+			"vm_end(0x%lx), vm pgoff %lu, %lu blocks, "
+			"vm_flags(0x%lx), vm_page_prot(0x%lx)\n",
+			__func__, __LINE__,
+			inode->i_ino, vma->vm_start, vma->vm_end,
+			vma->vm_pgoff,
+			(vma->vm_end - vma->vm_start) >> PAGE_SHIFT,
+			vma->vm_flags,
+			pgprot_val(vma->vm_page_prot));
+
+	return 0;
+}
+
+
 const struct file_operations nova_dax_file_operations = {
 	.llseek		= nova_llseek,
 	.read		= nova_dax_file_read,
 	.write		= nova_dax_file_write,
+	.mmap		= nova_dax_file_mmap,
 	.open		= nova_open,
 	.fsync		= nova_fsync,
 	.flush		= nova_flush,
