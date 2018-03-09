@@ -256,10 +256,218 @@ static ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 	return res;
 }
 
+/*
+ * Perform a COW write.   Must hold the inode lock before calling.
+ */
+static ssize_t do_nova_cow_file_write(struct file *filp,
+	const char __user *buf,	size_t len, loff_t *ppos)
+{
+	struct address_space *mapping = filp->f_mapping;
+	struct inode	*inode = mapping->host;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	struct super_block *sb = inode->i_sb;
+	struct nova_inode *pi;
+	struct nova_file_write_item *entry_item;
+	struct list_head item_head;
+	struct nova_inode_update update;
+	ssize_t	    written = 0;
+	loff_t pos;
+	size_t count, offset, copied;
+	unsigned long start_blk, num_blocks;
+	unsigned long total_blocks;
+	unsigned long blocknr = 0;
+	int allocated = 0;
+	void *kmem;
+	u64 file_size;
+	size_t bytes;
+	long status = 0;
+	timing_t cow_write_time, memcpy_time;
+	unsigned long step = 0;
+	ssize_t ret;
+	u64 epoch_id;
+	u32 time;
+
+
+	if (len == 0)
+		return 0;
+
+	sih_lock(sih);
+	NOVA_START_TIMING(cow_write_t, cow_write_time);
+	INIT_LIST_HEAD(&item_head);
+
+	if (!access_ok(VERIFY_READ, buf, len)) {
+		ret = -EFAULT;
+		goto out;
+	}
+	pos = *ppos;
+
+	if (filp->f_flags & O_APPEND)
+		pos = i_size_read(inode);
+
+	count = len;
+
+	pi = nova_get_block(sb, sih->pi_addr);
+
+	offset = pos & (sb->s_blocksize - 1);
+	num_blocks = ((count + offset - 1) >> sb->s_blocksize_bits) + 1;
+	total_blocks = num_blocks;
+	start_blk = pos >> sb->s_blocksize_bits;
+
+	/* offset in the actual block size block */
+
+	ret = file_remove_privs(filp);
+	if (ret)
+		goto out;
+
+	inode->i_ctime = inode->i_mtime = current_time(inode);
+	time = current_time(inode).tv_sec;
+
+	nova_dbgv("%s: inode %lu, offset %lld, count %lu\n",
+			__func__, inode->i_ino,	pos, count);
+
+	epoch_id = nova_get_epoch_id(sb);
+	update.tail = sih->log_tail;
+	while (num_blocks > 0) {
+		offset = pos & (nova_inode_blk_size(sih) - 1);
+		start_blk = pos >> sb->s_blocksize_bits;
+
+		/* don't zero-out the allocated blocks */
+		allocated = nova_new_data_blocks(sb, sih, &blocknr, start_blk,
+				 num_blocks, ALLOC_NO_INIT, ANY_CPU,
+				 ALLOC_FROM_HEAD);
+
+		nova_dbg_verbose("%s: alloc %d blocks @ %lu\n", __func__,
+						allocated, blocknr);
+
+		if (allocated <= 0) {
+			nova_dbg("%s alloc blocks failed %d\n", __func__,
+								allocated);
+			ret = allocated;
+			goto out;
+		}
+
+		step++;
+		bytes = sb->s_blocksize * allocated - offset;
+		if (bytes > count)
+			bytes = count;
+
+		kmem = nova_get_block(inode->i_sb,
+			     nova_get_block_off(sb, blocknr, sih->i_blk_type));
+
+		if (offset || ((offset + bytes) & (PAGE_SIZE - 1)) != 0)  {
+			ret = nova_handle_head_tail_blocks(sb, inode, pos,
+							   bytes, kmem);
+			if (ret)
+				goto out;
+		}
+		/* Now copy from user buf */
+		//		nova_dbg("Write: %p\n", kmem);
+		NOVA_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
+		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
+						buf, bytes);
+		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
+
+		if (pos + copied > inode->i_size)
+			file_size = cpu_to_le64(pos + copied);
+		else
+			file_size = cpu_to_le64(inode->i_size);
+
+		entry_item = nova_alloc_file_write_item(sb);
+		if (!entry_item) {
+			ret = -ENOMEM;
+			goto out;
+		}
+
+		nova_init_file_write_item(sb, sih, entry_item, epoch_id,
+					start_blk, allocated, blocknr, time,
+					file_size);
+
+		list_add_tail(&entry_item->list, &item_head);
+
+		nova_dbgv("Write: %p, %lu\n", kmem, copied);
+		if (copied > 0) {
+			status = copied;
+			written += copied;
+			pos += copied;
+			buf += copied;
+			count -= copied;
+			num_blocks -= allocated;
+		}
+		if (unlikely(copied != bytes)) {
+			nova_dbg("%s ERROR!: %p, bytes %lu, copied %lu\n",
+				__func__, kmem, bytes, copied);
+			if (status >= 0)
+				status = -EFAULT;
+		}
+		if (status < 0)
+			break;
+	}
+
+	ret = nova_commit_writes_to_log(sb, pi, inode,
+					&item_head, total_blocks, 1);
+	if (ret < 0) {
+		nova_err(sb, "commit to log failed\n");
+		goto out;
+	}
+
+	ret = written;
+	NOVA_STATS_ADD(cow_write_breaks, step);
+	nova_dbgv("blocks: %lu, %lu\n", inode->i_blocks, sih->i_blocks);
+
+	*ppos = pos;
+	if (pos > inode->i_size) {
+		i_size_write(inode, pos);
+		sih->i_size = pos;
+	}
+
+out:
+	if (ret < 0)
+		nova_cleanup_incomplete_write(sb, sih, &item_head, 1);
+
+	NOVA_END_TIMING(cow_write_t, cow_write_time);
+	NOVA_STATS_ADD(cow_write_bytes, written);
+	sih_unlock(sih);
+
+	return ret;
+}
+
+/*
+ * Acquire locks and perform COW write.
+ */
+ssize_t nova_cow_file_write(struct file *filp,
+	const char __user *buf,	size_t len, loff_t *ppos)
+{
+	struct address_space *mapping = filp->f_mapping;
+	struct inode *inode = mapping->host;
+	int ret;
+
+	if (len == 0)
+		return 0;
+
+	sb_start_write(inode->i_sb);
+	inode_lock(inode);
+
+	ret = do_nova_cow_file_write(filp, buf, len, ppos);
+
+	inode_unlock(inode);
+	sb_end_write(inode->i_sb);
+
+	return ret;
+}
+
+
+static ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
+				   size_t len, loff_t *ppos)
+{
+	return nova_cow_file_write(filp, buf, len, ppos);
+}
+
 
 const struct file_operations nova_dax_file_operations = {
 	.llseek		= nova_llseek,
 	.read		= nova_dax_file_read,
+	.write		= nova_dax_file_write,
 	.open		= nova_open,
 	.fsync		= nova_fsync,
 	.flush		= nova_flush,
