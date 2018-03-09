@@ -461,6 +461,10 @@ struct nova_dentry *nova_find_dentry(struct super_block *sb,
 	unsigned long name_len);
 int nova_append_dir_init_entries(struct super_block *sb,
 	struct nova_inode *pi, u64 self_ino, u64 parent_ino, u64 epoch_id);
+int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
+	struct nova_inode_update *update, u64 epoch_id);
+int nova_remove_dentry(struct dentry *dentry, int dec_link,
+	struct nova_inode_update *update, u64 epoch_id);
 
 /* rebuild.c */
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
