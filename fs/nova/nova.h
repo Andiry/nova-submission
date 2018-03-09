@@ -484,6 +484,10 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 int nova_remove_dentry(struct dentry *dentry, int dec_link,
 	struct nova_inode_update *update, u64 epoch_id);
 
+/* namei.c */
+extern const struct inode_operations nova_dir_inode_operations;
+extern struct dentry *nova_get_parent(struct dentry *child);
+
 /* rebuild.c */
 int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
