@@ -55,6 +55,7 @@ static const struct export_operations nova_export_ops;
 
 static struct kmem_cache *nova_inode_cachep;
 static struct kmem_cache *nova_range_node_cachep;
+static struct kmem_cache *nova_file_write_item_cachep;
 
 
 /* FIXME: should the following variable be one per NOVA instance? */
@@ -791,6 +792,21 @@ inline void nova_free_inode_node(struct super_block *sb,
 	nova_free_range_node(node);
 }
 
+inline void nova_free_file_write_item(struct nova_file_write_item *item)
+{
+	kmem_cache_free(nova_file_write_item_cachep, item);
+}
+
+inline struct nova_file_write_item *
+nova_alloc_file_write_item(struct super_block *sb)
+{
+	struct nova_file_write_item *p;
+
+	p = (struct nova_file_write_item *)
+		kmem_cache_alloc(nova_file_write_item_cachep, GFP_NOFS);
+	return p;
+}
+
 inline struct nova_range_node *nova_alloc_range_node(struct super_block *sb)
 {
 	struct nova_range_node *p;
@@ -849,6 +865,18 @@ static int __init init_rangenode_cache(void)
 	return 0;
 }
 
+static int __init init_file_write_item_cache(void)
+{
+	nova_file_write_item_cachep = kmem_cache_create(
+					"nova_file_write_item_cache",
+					sizeof(struct nova_file_write_item),
+					0, (SLAB_RECLAIM_ACCOUNT |
+					SLAB_MEM_SPREAD), NULL);
+	if (nova_file_write_item_cachep == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
 static int __init init_inodecache(void)
 {
 	nova_inode_cachep = kmem_cache_create("nova_inode_cache",
@@ -873,6 +901,11 @@ static void destroy_inodecache(void)
 static void destroy_rangenode_cache(void)
 {
 	kmem_cache_destroy(nova_range_node_cachep);
+}
+
+static void destroy_file_write_item_cache(void)
+{
+	kmem_cache_destroy(nova_file_write_item_cachep);
 }
 
 
@@ -974,13 +1007,20 @@ static int __init init_nova_fs(void)
 	if (rc)
 		goto out1;
 
-	rc = register_filesystem(&nova_fs_type);
+	rc = init_file_write_item_cache();
 	if (rc)
 		goto out2;
+
+	rc = register_filesystem(&nova_fs_type);
+	if (rc)
+		goto out3;
 
 out:
 	NOVA_END_TIMING(init_t, init_time);
 	return rc;
+
+out3:
+	destroy_file_write_item_cache();
 
 out2:
 	destroy_inodecache();
@@ -993,6 +1033,7 @@ out1:
 static void __exit exit_nova_fs(void)
 {
 	unregister_filesystem(&nova_fs_type);
+	destroy_file_write_item_cache();
 	destroy_inodecache();
 	destroy_rangenode_cache();
 }
