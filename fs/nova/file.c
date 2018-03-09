@@ -23,6 +23,53 @@
 #include "nova.h"
 #include "inode.h"
 
+static loff_t nova_llseek(struct file *file, loff_t offset, int origin)
+{
+	struct inode *inode = file->f_path.dentry->d_inode;
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	int retval;
+
+	if (origin != SEEK_DATA && origin != SEEK_HOLE)
+		return generic_file_llseek(file, offset, origin);
+
+	sih_lock_shared(sih);
+	switch (origin) {
+	case SEEK_DATA:
+		retval = nova_find_region(inode, &offset, 0);
+		if (retval) {
+			sih_unlock_shared(sih);
+			return retval;
+		}
+		break;
+	case SEEK_HOLE:
+		retval = nova_find_region(inode, &offset, 1);
+		if (retval) {
+			sih_unlock_shared(sih);
+			return retval;
+		}
+		break;
+	}
+
+	if ((offset < 0 && !(file->f_mode & FMODE_UNSIGNED_OFFSET)) ||
+	    offset > inode->i_sb->s_maxbytes) {
+		sih_unlock_shared(sih);
+		return -ENXIO;
+	}
+
+	if (offset != file->f_pos) {
+		file->f_pos = offset;
+		file->f_version = 0;
+	}
+
+	sih_unlock_shared(sih);
+	return offset;
+}
+
+
+const struct file_operations nova_dax_file_operations = {
+	.llseek		= nova_llseek,
+};
 
 const struct inode_operations nova_file_inode_operations = {
 	.setattr	= nova_notify_change,
