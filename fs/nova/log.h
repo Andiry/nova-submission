@@ -367,6 +367,8 @@ static inline int is_dir_init_entry(struct super_block *sb,
 int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, unsigned int ia_valid, struct iattr *attr,
 	u64 epoch_id);
+int nova_invalidate_link_change_entry(struct super_block *sb,
+	u64 old_link_change);
 int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
 	struct nova_inode_update *update, u64 *old_linkc, u64 epoch_id);
@@ -375,6 +377,8 @@ int nova_inplace_update_write_entry(struct super_block *sb,
 	struct nova_log_entry_info *entry_info);
 int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_item *item,
+	struct nova_inode_update *update);
+int nova_invalidate_dentries(struct super_block *sb,
 	struct nova_inode_update *update);
 int nova_inplace_update_dentry(struct super_block *sb,
 	struct inode *dir, struct nova_dentry *dentry, int link_change,
