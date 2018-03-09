@@ -464,6 +464,11 @@ nova_get_blocknr(struct super_block *sb, u64 block, unsigned short btype)
 /* ==============  Function prototypes  ================= */
 /* ====================================================== */
 
+/* dax.c */
+int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
+	struct inode *inode, struct list_head *head, unsigned long new_blocks,
+	int free);
+
 /* dir.c */
 extern const struct file_operations nova_dir_operations;
 int nova_insert_dir_radix_tree(struct super_block *sb,
