@@ -518,6 +518,11 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	u64 ino, u64 pi_addr, int rebuild_dir);
 
+/* symlink.c */
+int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
+	struct inode *inode, const char *symname, int len, u64 epoch_id);
+extern const struct inode_operations nova_symlink_inode_operations;
+
 /* stats.c */
 void nova_get_timing_stats(void);
 void nova_get_IO_stats(void);

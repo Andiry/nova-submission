@@ -207,6 +207,75 @@ out_err:
 	return err;
 }
 
+static int nova_symlink(struct inode *dir, struct dentry *dentry,
+	const char *symname)
+{
+	struct super_block *sb = dir->i_sb;
+	int err = -ENAMETOOLONG;
+	unsigned int len = strlen(symname);
+	struct inode *inode;
+	struct nova_inode_info *si;
+	struct nova_inode_info_header *sih;
+	u64 pi_addr = 0;
+	struct nova_inode *pidir, *pi;
+	struct nova_inode_update update;
+	u64 ino;
+	u64 epoch_id;
+	timing_t symlink_time;
+
+	NOVA_START_TIMING(symlink_t, symlink_time);
+	if (len + 1 > sb->s_blocksize)
+		goto out;
+
+	pidir = nova_get_inode(sb, dir);
+	if (!pidir)
+		goto out_fail;
+
+	epoch_id = nova_get_epoch_id(sb);
+	ino = nova_new_nova_inode(sb, &pi_addr);
+	if (ino == 0)
+		goto out_fail;
+
+	nova_dbgv("%s: name %s, symname %s\n", __func__,
+				dentry->d_name.name, symname);
+	nova_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
+
+	update.tail = 0;
+	err = nova_add_dentry(dentry, ino, 0, &update, epoch_id);
+	if (err)
+		goto out_fail;
+
+	inode = nova_new_vfs_inode(TYPE_SYMLINK, dir, pi_addr, ino,
+					S_IFLNK|0777, len, 0,
+					&dentry->d_name, epoch_id);
+	if (IS_ERR(inode)) {
+		err = PTR_ERR(inode);
+		goto out_fail;
+	}
+
+	pi = nova_get_inode(sb, inode);
+
+	si = NOVA_I(inode);
+	sih = &si->header;
+
+	err = nova_block_symlink(sb, pi, inode, symname, len, epoch_id);
+	if (err)
+		goto out_fail;
+
+	d_instantiate(dentry, inode);
+	unlock_new_inode(inode);
+
+	nova_lite_transaction_for_new_inode(sb, pi, pidir, inode, dir,
+					&update);
+out:
+	NOVA_END_TIMING(symlink_t, symlink_time);
+	return err;
+
+out_fail:
+	nova_err(sb, "%s return %d\n", __func__, err);
+	goto out;
+}
+
 static void nova_lite_transaction_for_time_and_link(struct super_block *sb,
 	struct nova_inode *pi, struct nova_inode *pidir, struct inode *inode,
 	struct inode *dir, struct nova_inode_update *update,
@@ -764,6 +833,7 @@ const struct inode_operations nova_dir_inode_operations = {
 	.lookup		= nova_lookup,
 	.link		= nova_link,
 	.unlink		= nova_unlink,
+	.symlink	= nova_symlink,
 	.mkdir		= nova_mkdir,
 	.rmdir		= nova_rmdir,
 	.mknod		= nova_mknod,
