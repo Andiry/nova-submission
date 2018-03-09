@@ -488,6 +488,7 @@ ssize_t do_nova_inplace_file_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos);
 
 extern const struct iomap_ops nova_iomap_ops;
+extern const struct vm_operations_struct nova_dax_vm_ops;
 
 
 /* dir.c */
