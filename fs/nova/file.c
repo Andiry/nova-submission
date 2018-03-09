@@ -448,7 +448,10 @@ ssize_t nova_cow_file_write(struct file *filp,
 	sb_start_write(inode->i_sb);
 	inode_lock(inode);
 
-	ret = do_nova_cow_file_write(filp, buf, len, ppos);
+	if (mapping_mapped(mapping))
+		ret = do_nova_inplace_file_write(filp, buf, len, ppos);
+	else
+		ret = do_nova_cow_file_write(filp, buf, len, ppos);
 
 	inode_unlock(inode);
 	sb_end_write(inode->i_sb);
@@ -460,7 +463,10 @@ ssize_t nova_cow_file_write(struct file *filp,
 static ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 				   size_t len, loff_t *ppos)
 {
-	return nova_cow_file_write(filp, buf, len, ppos);
+	if (inplace_data_updates)
+		return nova_inplace_file_write(filp, buf, len, ppos);
+	else
+		return nova_cow_file_write(filp, buf, len, ppos);
 }
 
 
