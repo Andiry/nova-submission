@@ -112,6 +112,7 @@ struct nova_sb_info {
 	struct mutex	s_lock;	/* protects the SB's buffer-head */
 
 	int cpus;
+	struct proc_dir_entry *s_proc;
 
 	/* Current epoch. volatile guarantees visibility */
 	volatile u64 s_epoch_id;

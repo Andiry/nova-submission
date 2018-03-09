@@ -596,6 +596,8 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
+	nova_sysfs_init(sb);
+
 	/* Init a new nova instance */
 	if (sbi->s_mount_opt & NOVA_MOUNT_FORMAT) {
 		root_pi = nova_init(sb, sbi->initsize);
@@ -679,6 +681,8 @@ out:
 
 	kfree(sbi->inode_maps);
 	sbi->inode_maps = NULL;
+
+	nova_sysfs_exit(sb);
 
 	kfree(sbi->nova_sb);
 	kfree(sbi);
@@ -782,6 +786,8 @@ static void nova_put_super(struct super_block *sb)
 		nova_dbgv("CPU %d: inode allocated %d, freed %d\n",
 			i, inode_map->allocated, inode_map->freed);
 	}
+
+	nova_sysfs_exit(sb);
 
 	kfree(sbi->inode_maps);
 	kfree(sbi->nova_sb);
@@ -1007,6 +1013,8 @@ static int __init init_nova_fs(void)
 	nova_info("Arch new instructions support: CLWB %s\n",
 			support_clwb ? "YES" : "NO");
 
+	nova_proc_root = proc_mkdir(proc_dirname, NULL);
+
 	rc = init_rangenode_cache();
 	if (rc)
 		goto out;
@@ -1041,6 +1049,7 @@ out1:
 static void __exit exit_nova_fs(void)
 {
 	unregister_filesystem(&nova_fs_type);
+	remove_proc_entry(proc_dirname, NULL);
 	destroy_file_write_item_cache();
 	destroy_inodecache();
 	destroy_rangenode_cache();
