@@ -51,6 +51,7 @@ module_param(nova_dbgmask, int, 0444);
 MODULE_PARM_DESC(nova_dbgmask, "Control debugging output");
 
 static struct super_operations nova_sops;
+static const struct export_operations nova_export_ops;
 
 static struct kmem_cache *nova_inode_cachep;
 static struct kmem_cache *nova_range_node_cachep;
@@ -631,6 +632,7 @@ setup_sb:
 	sb->s_op = &nova_sops;
 	sb->s_maxbytes = nova_max_size(sb->s_blocksize_bits);
 	sb->s_time_gran = 1000000000; // 1 second.
+	sb->s_export_op = &nova_export_ops;
 	sb->s_xattr = NULL;
 	sb->s_flags |= MS_NOSEC;
 
@@ -902,6 +904,52 @@ static struct file_system_type nova_fs_type = {
 	.name		= "NOVA",
 	.mount		= nova_mount,
 	.kill_sb	= kill_block_super,
+};
+
+static struct inode *nova_nfs_get_inode(struct super_block *sb,
+					 u64 ino, u32 generation)
+{
+	struct inode *inode;
+
+	if (ino < NOVA_ROOT_INO)
+		return ERR_PTR(-ESTALE);
+
+	if (ino > LONG_MAX)
+		return ERR_PTR(-ESTALE);
+
+	inode = nova_iget(sb, ino);
+	if (IS_ERR(inode))
+		return ERR_CAST(inode);
+
+	if (generation && inode->i_generation != generation) {
+		/* we didn't find the right inode.. */
+		iput(inode);
+		return ERR_PTR(-ESTALE);
+	}
+
+	return inode;
+}
+
+static struct dentry *nova_fh_to_dentry(struct super_block *sb,
+					 struct fid *fid, int fh_len,
+					 int fh_type)
+{
+	return generic_fh_to_dentry(sb, fid, fh_len, fh_type,
+				    nova_nfs_get_inode);
+}
+
+static struct dentry *nova_fh_to_parent(struct super_block *sb,
+					 struct fid *fid, int fh_len,
+					 int fh_type)
+{
+	return generic_fh_to_parent(sb, fid, fh_len, fh_type,
+				    nova_nfs_get_inode);
+}
+
+static const struct export_operations nova_export_ops = {
+	.fh_to_dentry	= nova_fh_to_dentry,
+	.fh_to_parent	= nova_fh_to_parent,
+	.get_parent	= nova_get_parent,
 };
 
 static int __init init_nova_fs(void)
