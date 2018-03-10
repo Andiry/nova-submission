@@ -16,6 +16,7 @@
  */
 
 #include "nova.h"
+#include "journal.h"
 #include "inode.h"
 #include "log.h"
 

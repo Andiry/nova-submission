@@ -38,6 +38,7 @@
 #include <linux/list.h>
 #include <linux/dax.h>
 #include "nova.h"
+#include "journal.h"
 #include "super.h"
 
 int measure_timing;
