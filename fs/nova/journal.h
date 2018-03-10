@@ -40,4 +40,15 @@ struct journal_ptr_pair *nova_get_journal_pointers(struct super_block *sb,
 }
 
 
+u64 nova_create_inode_transaction(struct super_block *sb,
+	struct inode *inode, struct inode *dir, int cpu,
+	int new_inode, int invalidate);
+u64 nova_create_rename_transaction(struct super_block *sb,
+	struct inode *old_inode, struct inode *old_dir, struct inode *new_inode,
+	struct inode *new_dir, struct nova_dentry *father_entry,
+	int invalidate_new_inode, int cpu);
+u64 nova_create_logentry_transaction(struct super_block *sb,
+	void *entry, enum nova_entry_type type, int cpu);
+void nova_commit_lite_transaction(struct super_block *sb, u64 tail, int cpu);
+
 #endif
