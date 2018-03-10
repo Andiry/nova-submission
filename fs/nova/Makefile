@@ -4,4 +4,4 @@
 
 obj-$(CONFIG_NOVA_FS) += nova.o
 
-nova-y := bbuild.o inode.o rebuild.o super.o
+nova-y := bbuild.o inode.o rebuild.o stats.o super.o

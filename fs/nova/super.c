@@ -40,7 +40,11 @@
 #include "nova.h"
 #include "super.h"
 
+int measure_timing;
 int support_clwb;
+
+module_param(measure_timing, int, 0444);
+MODULE_PARM_DESC(measure_timing, "Timing measurement");
 
 module_param(nova_dbgmask, int, 0444);
 MODULE_PARM_DESC(nova_dbgmask, "Control debugging output");
@@ -499,6 +503,8 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 			 __func__);
 		goto out;
 	}
+
+	nova_dbg("measure timing %d\n", measure_timing);
 
 	get_random_bytes(&random, sizeof(u32));
 	atomic_set(&sbi->next_generation, random);
