@@ -48,6 +48,7 @@
 #include <linux/pagevec.h>
 
 #include "nova_def.h"
+#include "stats.h"
 
 #define PAGE_SHIFT_2M 21
 #define PAGE_SHIFT_1G 30
@@ -134,6 +135,10 @@ extern unsigned int nova_dbgmask;
 #define	READDIR_END			(ULONG_MAX)
 #define	ANY_CPU				(65536)
 #define	FREE_BATCH			(16)
+
+
+extern int measure_timing;
+
 
 extern unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX];
 extern unsigned int blk_type_to_size[NOVA_BLOCK_TYPE_MAX];
@@ -305,5 +310,12 @@ static inline u64 nova_get_epoch_id(struct super_block *sb)
 /* rebuild.c */
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 	u64 ino, u64 pi_addr, int rebuild_dir);
+
+/* stats.c */
+void nova_get_timing_stats(void);
+void nova_get_IO_stats(void);
+void nova_print_timing_stats(struct super_block *sb);
+void nova_clear_stats(struct super_block *sb);
+void nova_print_inode(struct nova_inode *pi);
 
 #endif /* __NOVA_H */
