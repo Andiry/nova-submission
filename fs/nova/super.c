@@ -52,6 +52,7 @@ MODULE_PARM_DESC(nova_dbgmask, "Control debugging output");
 static struct super_operations nova_sops;
 
 static struct kmem_cache *nova_inode_cachep;
+static struct kmem_cache *nova_range_node_cachep;
 
 
 /* FIXME: should the following variable be one per NOVA instance? */
@@ -686,6 +687,20 @@ static void nova_put_super(struct super_block *sb)
 	sb->s_fs_info = NULL;
 }
 
+inline void nova_free_range_node(struct nova_range_node *node)
+{
+	kmem_cache_free(nova_range_node_cachep, node);
+}
+
+inline struct nova_range_node *nova_alloc_range_node(struct super_block *sb)
+{
+	struct nova_range_node *p;
+
+	p = (struct nova_range_node *)
+		kmem_cache_zalloc(nova_range_node_cachep, GFP_NOFS);
+	return p;
+}
+
 static struct inode *nova_alloc_inode(struct super_block *sb)
 {
 	struct nova_inode_info *vi;
@@ -719,6 +734,17 @@ static void init_once(void *foo)
 	inode_init_once(&vi->vfs_inode);
 }
 
+static int __init init_rangenode_cache(void)
+{
+	nova_range_node_cachep = kmem_cache_create("nova_range_node_cache",
+					sizeof(struct nova_range_node),
+					0, (SLAB_RECLAIM_ACCOUNT |
+					SLAB_MEM_SPREAD), NULL);
+	if (nova_range_node_cachep == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
 static int __init init_inodecache(void)
 {
 	nova_inode_cachep = kmem_cache_create("nova_inode_cache",
@@ -738,6 +764,11 @@ static void destroy_inodecache(void)
 	 */
 	rcu_barrier();
 	kmem_cache_destroy(nova_inode_cachep);
+}
+
+static void destroy_rangenode_cache(void)
+{
+	kmem_cache_destroy(nova_range_node_cachep);
 }
 
 
@@ -781,20 +812,27 @@ static int __init init_nova_fs(void)
 	nova_info("Arch new instructions support: CLWB %s\n",
 			support_clwb ? "YES" : "NO");
 
-	rc = init_inodecache();
+	rc = init_rangenode_cache();
 	if (rc)
 		goto out;
 
-	rc = register_filesystem(&nova_fs_type);
+	rc = init_inodecache();
 	if (rc)
 		goto out1;
+
+	rc = register_filesystem(&nova_fs_type);
+	if (rc)
+		goto out2;
 
 out:
 	NOVA_END_TIMING(init_t, init_time);
 	return rc;
 
-out1:
+out2:
 	destroy_inodecache();
+
+out1:
+	destroy_rangenode_cache();
 	goto out;
 }
 
@@ -802,6 +840,7 @@ static void __exit exit_nova_fs(void)
 {
 	unregister_filesystem(&nova_fs_type);
 	destroy_inodecache();
+	destroy_rangenode_cache();
 }
 
 MODULE_AUTHOR("Andiry Xu <jix024@cs.ucsd.edu>");
