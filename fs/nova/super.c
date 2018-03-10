@@ -705,6 +705,8 @@ static void nova_put_super(struct super_block *sb)
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
 	if (sbi->virt_addr) {
+		/* Save everything before blocknode mapping! */
+		nova_save_blocknode_mappings_to_log(sb);
 		sbi->virt_addr = NULL;
 	}
 
