@@ -545,6 +545,13 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
+	if (nova_alloc_block_free_lists(sb)) {
+		retval = -ENOMEM;
+		nova_err(sb, "%s: Failed to allocate block free lists.",
+			 __func__);
+		goto out;
+	}
+
 	/* Init a new nova instance */
 	if (sbi->s_mount_opt & NOVA_MOUNT_FORMAT) {
 		root_pi = nova_init(sb, sbi->initsize);
@@ -610,6 +617,8 @@ setup_sb:
 out:
 	kfree(sbi->zeroed_page);
 	sbi->zeroed_page = NULL;
+
+	nova_delete_free_lists(sb);
 
 	kfree(sbi->nova_sb);
 	kfree(sbi);
@@ -678,6 +687,8 @@ static void nova_put_super(struct super_block *sb)
 	if (sbi->virt_addr) {
 		sbi->virt_addr = NULL;
 	}
+
+	nova_delete_free_lists(sb);
 
 	kfree(sbi->zeroed_page);
 	nova_dbgmask = 0;

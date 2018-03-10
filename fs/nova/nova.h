@@ -310,6 +310,7 @@ struct nova_range_node {
 };
 
 #include "bbuild.h"
+#include "balloc.h"
 
 /* ====================================================== */
 /* ==============  Function prototypes  ================= */
