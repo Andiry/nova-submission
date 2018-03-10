@@ -25,6 +25,7 @@
 #include <linux/random.h>
 #include <linux/delay.h>
 #include "nova.h"
+#include "journal.h"
 #include "super.h"
 #include "inode.h"
 
