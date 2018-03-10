@@ -296,4 +296,14 @@ static inline u64 nova_get_epoch_id(struct super_block *sb)
 }
 
 #include "inode.h"
+#include "bbuild.h"
+
+/* ====================================================== */
+/* ==============  Function prototypes  ================= */
+/* ====================================================== */
+
+/* rebuild.c */
+int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
+	u64 ino, u64 pi_addr, int rebuild_dir);
+
 #endif /* __NOVA_H */

@@ -158,6 +158,12 @@ struct inode *nova_iget(struct super_block *sb, unsigned long ino)
 		goto fail;
 	}
 
+	err = nova_rebuild_inode(sb, si, ino, pi_addr, 1);
+	if (err) {
+		nova_dbg("%s: failed to rebuild inode %lu\n", __func__, ino);
+		goto fail;
+	}
+
 	err = nova_read_inode(sb, inode, pi_addr);
 	if (unlikely(err)) {
 		nova_dbg("%s: failed to read inode %lu\n", __func__, ino);
