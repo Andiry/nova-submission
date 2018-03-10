@@ -378,6 +378,9 @@ static struct nova_inode *nova_init(struct super_block *sb,
 
 	nova_init_blockmap(sb, 0);
 
+	if (nova_init_inode_inuse_list(sb) < 0)
+		return ERR_PTR(-EINVAL);
+
 	if (nova_init_inode_table(sb) < 0)
 		return ERR_PTR(-EINVAL);
 
@@ -420,6 +423,7 @@ static inline void set_default_opts(struct nova_sb_info *sbi)
 	sbi->head_reserved_blocks = HEAD_RESERVED_BLOCKS;
 	sbi->tail_reserved_blocks = TAIL_RESERVED_BLOCKS;
 	sbi->cpus = num_online_cpus();
+	sbi->map_id = 0;
 }
 
 static void nova_root_check(struct super_block *sb, struct nova_inode *root_pi)
@@ -481,9 +485,11 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	struct nova_sb_info *sbi = NULL;
 	struct nova_inode *root_pi;
 	struct inode *root_i = NULL;
+	struct inode_map *inode_map;
 	unsigned long blocksize;
 	u32 random = 0;
 	int retval = -EINVAL;
+	int i;
 	timing_t mount_time;
 
 	NOVA_START_TIMING(mount_t, mount_time);
@@ -532,6 +538,21 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->uid = current_fsuid();
 	sbi->gid = current_fsgid();
 	set_opt(sbi->s_mount_opt, HUGEIOREMAP);
+
+	sbi->inode_maps = kcalloc(sbi->cpus, sizeof(struct inode_map),
+					GFP_KERNEL);
+	if (!sbi->inode_maps) {
+		retval = -ENOMEM;
+		nova_dbg("%s: Allocating inode maps failed.",
+			 __func__);
+		goto out;
+	}
+
+	for (i = 0; i < sbi->cpus; i++) {
+		inode_map = &sbi->inode_maps[i];
+		mutex_init(&inode_map->inode_table_mutex);
+		inode_map->inode_inuse_tree = RB_ROOT;
+	}
 
 	mutex_init(&sbi->s_lock);
 
@@ -625,6 +646,9 @@ out:
 
 	nova_delete_free_lists(sb);
 
+	kfree(sbi->inode_maps);
+	sbi->inode_maps = NULL;
+
 	kfree(sbi->nova_sb);
 	kfree(sbi);
 	nova_dbg("%s failed: return %d\n", __func__, retval);
@@ -706,6 +730,8 @@ restore_opt:
 static void nova_put_super(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
+	struct inode_map *inode_map;
+	int i;
 
 	if (sbi->virt_addr) {
 		/* Save everything before blocknode mapping! */
@@ -718,6 +744,13 @@ static void nova_put_super(struct super_block *sb)
 	kfree(sbi->zeroed_page);
 	nova_dbgmask = 0;
 
+	for (i = 0; i < sbi->cpus; i++) {
+		inode_map = &sbi->inode_maps[i];
+		nova_dbgv("CPU %d: inode allocated %d, freed %d\n",
+			i, inode_map->allocated, inode_map->freed);
+	}
+
+	kfree(sbi->inode_maps);
 	kfree(sbi->nova_sb);
 	kfree(sbi);
 	sb->s_fs_info = NULL;
@@ -728,6 +761,12 @@ inline void nova_free_range_node(struct nova_range_node *node)
 	kmem_cache_free(nova_range_node_cachep, node);
 }
 
+inline void nova_free_inode_node(struct super_block *sb,
+	struct nova_range_node *node)
+{
+	nova_free_range_node(node);
+}
+
 inline struct nova_range_node *nova_alloc_range_node(struct super_block *sb)
 {
 	struct nova_range_node *p;
@@ -735,6 +774,11 @@ inline struct nova_range_node *nova_alloc_range_node(struct super_block *sb)
 	p = (struct nova_range_node *)
 		kmem_cache_zalloc(nova_range_node_cachep, GFP_NOFS);
 	return p;
+}
+
+inline struct nova_range_node *nova_alloc_inode_node(struct super_block *sb)
+{
+	return nova_alloc_range_node(sb);
 }
 
 static struct inode *nova_alloc_inode(struct super_block *sb)

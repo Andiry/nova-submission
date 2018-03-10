@@ -318,6 +318,16 @@ struct nova_range_node {
 };
 
 #include "bbuild.h"
+
+struct inode_map {
+	struct mutex		inode_table_mutex;
+	struct rb_root		inode_inuse_tree;
+	unsigned long		num_range_node_inode;
+	struct nova_range_node *first_inode_range;
+	int			allocated;
+	int			freed;
+};
+
 #include "balloc.h"
 
 static inline unsigned long
