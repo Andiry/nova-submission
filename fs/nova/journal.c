@@ -106,3 +106,58 @@ static int nova_check_journal_entries(struct super_block *sb,
 
 	return 0;
 }
+
+/**************************** Journal Recovery ******************************/
+
+static void nova_undo_journal_entry(struct super_block *sb,
+	struct nova_lite_journal_entry *entry)
+{
+	u64 addr, value;
+
+	addr = le64_to_cpu(entry->data1);
+	value = le64_to_cpu(entry->data2);
+
+	*(u64 *)nova_get_block(sb, addr) = (u64)value;
+	nova_flush_buffer((void *)nova_get_block(sb, addr), CACHELINE_SIZE, 0);
+}
+
+static void nova_undo_lite_journal_entry(struct super_block *sb,
+	struct nova_lite_journal_entry *entry)
+{
+	u64 type;
+
+	type = le64_to_cpu(entry->type);
+
+	switch (type) {
+	case JOURNAL_INODE:
+		/* Currently unused */
+		break;
+	case JOURNAL_ENTRY:
+		nova_undo_journal_entry(sb, entry);
+		break;
+	default:
+		nova_dbg("%s: unknown data type %llu\n", __func__, type);
+		break;
+	}
+}
+
+/* Roll back all journal enries */
+static int nova_recover_lite_journal(struct super_block *sb,
+	struct journal_ptr_pair *pair)
+{
+	struct nova_lite_journal_entry *entry;
+	u64 temp;
+
+	temp = pair->journal_head;
+	while (temp != pair->journal_tail) {
+		entry = (struct nova_lite_journal_entry *)nova_get_block(sb,
+									temp);
+		nova_undo_lite_journal_entry(sb, entry);
+		temp = next_lite_journal(temp);
+	}
+
+	pair->journal_tail = pair->journal_head;
+	nova_flush_buffer(&pair->journal_head, CACHELINE_SIZE, 1);
+
+	return 0;
+}
