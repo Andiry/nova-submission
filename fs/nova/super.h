@@ -118,6 +118,10 @@ struct nova_sb_info {
 
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
+
+	/* Per-CPU free block list */
+	struct free_list *free_lists;
+	unsigned long per_list_blocks;
 };
 
 static inline struct nova_sb_info *NOVA_SB(struct super_block *sb)

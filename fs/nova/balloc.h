@@ -1,0 +1,66 @@
+#ifndef __BALLOC_H
+#define __BALLOC_H
+
+#include "inode.h"
+
+/* DRAM structure to hold a list of free PMEM blocks */
+struct free_list {
+	spinlock_t s_lock;
+	struct rb_root	block_free_tree;
+	struct nova_range_node *first_node; // lowest address free range
+	struct nova_range_node *last_node; // highest address free range
+
+	int		index; // Which CPU do I belong to?
+
+	/*
+	 * Start and end of allocatable range, inclusive.
+	 */
+	unsigned long	block_start;
+	unsigned long	block_end;
+
+	unsigned long	num_free_blocks;
+
+	/* How many nodes in the rb tree? */
+	unsigned long	num_blocknode;
+
+	u32		csum;		/* Protect integrity */
+
+	/* Statistics */
+	unsigned long	alloc_log_count;
+	unsigned long	alloc_data_count;
+	unsigned long	free_log_count;
+	unsigned long	free_data_count;
+	unsigned long	alloc_log_pages;
+	unsigned long	alloc_data_pages;
+	unsigned long	freed_log_pages;
+	unsigned long	freed_data_pages;
+
+	u64		padding[8];	/* Cache line break */
+};
+
+static inline
+struct free_list *nova_get_free_list(struct super_block *sb, int cpu)
+{
+	struct nova_sb_info *sbi = NOVA_SB(sb);
+
+	return &sbi->free_lists[cpu];
+}
+
+enum nova_alloc_direction {ALLOC_FROM_HEAD = 0,
+			   ALLOC_FROM_TAIL = 1};
+
+enum nova_alloc_init {ALLOC_NO_INIT = 0,
+		      ALLOC_INIT_ZERO = 1};
+
+enum alloc_type {
+	LOG = 1,
+	DATA,
+};
+
+
+
+
+int nova_alloc_block_free_lists(struct super_block *sb);
+void nova_delete_free_lists(struct super_block *sb);
+
+#endif
