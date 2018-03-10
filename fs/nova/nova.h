@@ -326,5 +326,6 @@ void nova_get_IO_stats(void);
 void nova_print_timing_stats(struct super_block *sb);
 void nova_clear_stats(struct super_block *sb);
 void nova_print_inode(struct nova_inode *pi);
+void nova_print_free_lists(struct super_block *sb);
 
 #endif /* __NOVA_H */
