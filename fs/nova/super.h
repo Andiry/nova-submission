@@ -145,5 +145,7 @@ static inline struct nova_super_block *nova_get_super(struct super_block *sb)
 }
 
 extern void nova_error_mng(struct super_block *sb, const char *fmt, ...);
+extern struct nova_range_node *nova_alloc_range_node(struct super_block *sb);
+extern void nova_free_range_node(struct nova_range_node *node);
 
 #endif
