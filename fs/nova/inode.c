@@ -181,6 +181,7 @@ static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	case S_IFREG:
 		break;
 	case S_IFDIR:
+		inode->i_fop = &nova_dir_operations;
 		break;
 	case S_IFLNK:
 		break;
@@ -625,6 +626,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 		inode->i_mapping->a_ops = &nova_aops_dax;
 		break;
 	case TYPE_MKDIR:
+		inode->i_fop = &nova_dir_operations;
 		inode->i_mapping->a_ops = &nova_aops_dax;
 		set_nlink(inode, 2);
 		break;
