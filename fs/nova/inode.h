@@ -123,6 +123,19 @@ static inline void sih_unlock_shared(struct nova_inode_info_header *header)
 	up_read(&header->i_sem);
 }
 
+static inline void nova_update_tail(struct nova_inode *pi, u64 new_tail)
+{
+	timing_t update_time;
+
+	NOVA_START_TIMING(update_tail_t, update_time);
+
+	PERSISTENT_BARRIER();
+	pi->log_tail = new_tail;
+	nova_flush_buffer(&pi->log_tail, CACHELINE_SIZE, 1);
+
+	NOVA_END_TIMING(update_tail_t, update_time);
+}
+
 static inline unsigned int
 nova_inode_blk_shift(struct nova_inode_info_header *sih)
 {
