@@ -457,7 +457,7 @@ static int nova_alloc_unused_inode(struct super_block *sb, int cpuid,
 	return 0;
 }
 
-int nova_free_inuse_inode(struct super_block *sb, unsigned long ino)
+static int nova_free_inuse_inode(struct super_block *sb, unsigned long ino)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct inode_map *inode_map;
@@ -530,6 +530,261 @@ block_found:
 	inode_map->freed++;
 	mutex_unlock(&inode_map->inode_table_mutex);
 	return ret;
+}
+
+static int nova_free_inode(struct super_block *sb, struct nova_inode *pi,
+	struct nova_inode_info_header *sih)
+{
+	int err = 0;
+	timing_t free_time;
+
+	NOVA_START_TIMING(free_inode_t, free_time);
+
+	nova_free_inode_log(sb, pi, sih);
+
+	sih->log_pages = 0;
+	sih->i_mode = 0;
+	sih->pi_addr = 0;
+	sih->i_size = 0;
+	sih->i_blocks = 0;
+
+	err = nova_free_inuse_inode(sb, pi->nova_ino);
+
+	NOVA_END_TIMING(free_inode_t, free_time);
+	return err;
+}
+
+/*
+ * We do not really rely on this last blocknr
+ * because blocks can be allocated beyond file end
+ */
+static unsigned long nova_get_last_blocknr(struct super_block *sb,
+	struct nova_inode_info_header *sih)
+{
+	struct nova_inode *pi, fake_pi;
+	unsigned long last_blocknr;
+	unsigned int btype;
+	unsigned int data_bits;
+	int ret;
+
+	ret = nova_get_reference(sb, sih->pi_addr, &fake_pi,
+			(void **)&pi, sizeof(struct nova_inode));
+	if (ret) {
+		nova_dbg("%s: read pi @ 0x%lx failed\n",
+				__func__, sih->pi_addr);
+		btype = 0;
+	} else {
+		btype = sih->i_blk_type;
+	}
+
+	data_bits = blk_type_to_shift[btype];
+
+	if (sih->i_size == 0)
+		last_blocknr = 0;
+	else
+		last_blocknr = (sih->i_size - 1) >> data_bits;
+
+	return last_blocknr;
+}
+
+int nova_delete_file_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long start_blocknr,
+	unsigned long last_blocknr, bool delete_nvmm, bool delete_dead,
+	u64 epoch_id)
+{
+	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *old_entry = NULL;
+	unsigned long pgoff = start_blocknr;
+	unsigned long old_pgoff = 0;
+	unsigned int num_free = 0;
+	int freed = 0;
+	void *ret;
+	timing_t delete_time;
+
+	NOVA_START_TIMING(delete_file_tree_t, delete_time);
+
+	/* Handle EOF blocks */
+	do {
+		entry = radix_tree_lookup(&sih->tree, pgoff);
+		if (entry) {
+			ret = radix_tree_delete(&sih->tree, pgoff);
+			WARN_ON(!ret || ret != entry);
+			if (entry != old_entry) {
+				if (old_entry && delete_nvmm) {
+					nova_free_old_entry(sb, sih,
+							old_entry, old_pgoff,
+							num_free, delete_dead,
+							epoch_id);
+					freed += num_free;
+				}
+
+				old_entry = entry;
+				old_pgoff = pgoff;
+				num_free = 1;
+			} else {
+				num_free++;
+			}
+			pgoff++;
+		} else {
+			/* We are finding a hole. Jump to the next entry. */
+			entry = nova_find_next_entry(sb, sih, pgoff);
+			if (!entry)
+				break;
+
+			pgoff++;
+			pgoff = pgoff > entry->pgoff ? pgoff : entry->pgoff;
+		}
+	} while (1);
+
+	if (old_entry && delete_nvmm) {
+		nova_free_old_entry(sb, sih, old_entry, old_pgoff,
+					num_free, delete_dead, epoch_id);
+		freed += num_free;
+	}
+
+	nova_dbgv("Inode %lu: delete file tree from pgoff %lu to %lu, %d blocks freed\n",
+			sih->ino, start_blocknr, last_blocknr, freed);
+
+	NOVA_END_TIMING(delete_file_tree_t, delete_time);
+	return freed;
+}
+
+static int nova_free_dram_resource(struct super_block *sb,
+	struct nova_inode_info_header *sih)
+{
+	unsigned long last_blocknr;
+	int freed = 0;
+
+	if (sih->ino == 0)
+		return 0;
+
+	if (!(S_ISREG(sih->i_mode)) && !(S_ISDIR(sih->i_mode)))
+		return 0;
+
+	if (S_ISREG(sih->i_mode)) {
+		last_blocknr = nova_get_last_blocknr(sb, sih);
+		freed = nova_delete_file_tree(sb, sih, 0,
+					last_blocknr, false, false, 0);
+	} else {
+		nova_delete_dir_tree(sb, sih);
+		freed = 1;
+	}
+
+	return freed;
+}
+
+static int nova_free_inode_resource(struct super_block *sb,
+	struct nova_inode *pi, struct nova_inode_info_header *sih)
+{
+	unsigned long last_blocknr;
+	int ret = 0;
+	int freed = 0;
+
+	pi->deleted = 1;
+
+	if (pi->valid) {
+		nova_dbg("%s: inode %lu still valid\n",
+				__func__, sih->ino);
+		pi->valid = 0;
+	}
+	nova_persist_inode(pi);
+
+	/* We need the log to free the blocks from the b-tree */
+	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
+	case S_IFREG:
+		last_blocknr = nova_get_last_blocknr(sb, sih);
+		nova_dbgv("%s: file ino %lu\n", __func__, sih->ino);
+		freed = nova_delete_file_tree(sb, sih, 0,
+					last_blocknr, true, true, 0);
+		break;
+	case S_IFDIR:
+		nova_dbgv("%s: dir ino %lu\n", __func__, sih->ino);
+		nova_delete_dir_tree(sb, sih);
+		break;
+	case S_IFLNK:
+		/* Log will be freed later */
+		nova_dbgv("%s: symlink ino %lu\n",
+				__func__, sih->ino);
+		freed = nova_delete_file_tree(sb, sih, 0, 0,
+						true, true, 0);
+		break;
+	default:
+		nova_dbgv("%s: special ino %lu\n",
+				__func__, sih->ino);
+		break;
+	}
+
+	nova_dbg_verbose("%s: Freed %d\n", __func__, freed);
+	/* Then we can free the inode */
+	ret = nova_free_inode(sb, pi, sih);
+	if (ret)
+		nova_err(sb, "%s: free inode %lu failed\n",
+				__func__, sih->ino);
+
+	return ret;
+}
+
+void nova_evict_inode(struct inode *inode)
+{
+	struct super_block *sb = inode->i_sb;
+	struct nova_inode *pi = nova_get_inode(sb, inode);
+	struct nova_inode_info *si = NOVA_I(inode);
+	struct nova_inode_info_header *sih = &si->header;
+	timing_t evict_time;
+	int destroy = 0;
+	int ret;
+
+	NOVA_START_TIMING(evict_inode_t, evict_time);
+	if (!sih) {
+		nova_err(sb, "%s: ino %lu sih is NULL!\n",
+				__func__, inode->i_ino);
+		NOVA_ASSERT(0);
+		goto out;
+	}
+
+	// pi can be NULL if the file has already been deleted, but a handle
+	// remains.
+	if (pi && pi->nova_ino != inode->i_ino) {
+		nova_err(sb, "%s: inode %lu ino does not match: %llu\n",
+				__func__, inode->i_ino, pi->nova_ino);
+		nova_dbg("inode size %llu, pi addr 0x%lx, pi head 0x%llx, tail 0x%llx, mode %u\n",
+				inode->i_size, sih->pi_addr, sih->log_head,
+				sih->log_tail, pi->i_mode);
+		nova_dbg("sih: ino %lu, inode size %lu, mode %u, inode mode %u\n",
+				sih->ino, sih->i_size,
+				sih->i_mode, inode->i_mode);
+		nova_print_inode_log(sb, inode);
+	}
+
+	nova_dbg_verbose("%s: %lu\n", __func__, inode->i_ino);
+	if (!inode->i_nlink && !is_bad_inode(inode)) {
+		if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
+			goto out;
+
+		if (pi) {
+			ret = nova_free_inode_resource(sb, pi, sih);
+			if (ret)
+				goto out;
+		}
+
+		destroy = 1;
+		pi = NULL; /* we no longer own the nova_inode */
+
+		inode->i_mtime = inode->i_ctime = current_time(inode);
+		inode->i_size = 0;
+	}
+out:
+	if (destroy == 0) {
+		nova_dbgv("%s: destroying %lu\n", __func__, inode->i_ino);
+		nova_free_dram_resource(sb, sih);
+	}
+	/* TODO: Since we don't use page-cache, do we really need the following
+	 * call?
+	 */
+	truncate_inode_pages(&inode->i_data, 0);
+
+	clear_inode(inode);
+	NOVA_END_TIMING(evict_inode_t, evict_time);
 }
 
 /* Returns 0 on failure */
