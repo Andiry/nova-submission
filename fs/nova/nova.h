@@ -447,6 +447,7 @@ nova_get_blocknr(struct super_block *sb, u64 block, unsigned short btype)
 /* ====================================================== */
 
 /* dir.c */
+extern const struct file_operations nova_dir_operations;
 int nova_insert_dir_radix_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih, const char *name,
 	int namelen, struct nova_dentry *direntry);
