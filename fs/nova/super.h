@@ -119,6 +119,12 @@ struct nova_sb_info {
 	/* ZEROED page for cache page initialized */
 	void *zeroed_page;
 
+	/* Per-CPU inode map */
+	struct inode_map	*inode_maps;
+
+	/* Decide new inode map id */
+	unsigned long map_id;
+
 	/* Per-CPU free block list */
 	struct free_list *free_lists;
 	unsigned long per_list_blocks;
@@ -150,6 +156,9 @@ static inline struct nova_super_block *nova_get_super(struct super_block *sb)
 
 extern void nova_error_mng(struct super_block *sb, const char *fmt, ...);
 extern struct nova_range_node *nova_alloc_range_node(struct super_block *sb);
+extern inline struct nova_range_node *nova_alloc_inode_node(struct super_block *sb);
 extern void nova_free_range_node(struct nova_range_node *node);
+extern inline void nova_free_inode_node(struct super_block *sb,
+	struct nova_range_node *node);
 
 #endif
