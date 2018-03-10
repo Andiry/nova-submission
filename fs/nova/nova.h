@@ -340,6 +340,19 @@ static inline int old_entry_freeable(struct super_block *sb, u64 epoch_id)
 	return 0;
 }
 
+// BKDR String Hash Function
+static inline unsigned long BKDRHash(const char *str, int length)
+{
+	unsigned int seed = 131; // 31 131 1313 13131 131313 etc..
+	unsigned long hash = 0;
+	int i;
+
+	for (i = 0; i < length; i++)
+		hash = hash * seed + (*str++);
+
+	return hash;
+}
+
 #include "balloc.h"
 
 static inline struct nova_file_write_entry *
@@ -432,6 +445,19 @@ nova_get_blocknr(struct super_block *sb, u64 block, unsigned short btype)
 /* ====================================================== */
 /* ==============  Function prototypes  ================= */
 /* ====================================================== */
+
+/* dir.c */
+int nova_insert_dir_radix_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, const char *name,
+	int namelen, struct nova_dentry *direntry);
+int nova_remove_dir_radix_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih, const char *name, int namelen,
+	int replay, struct nova_dentry **create_dentry);
+void nova_delete_dir_tree(struct super_block *sb,
+	struct nova_inode_info_header *sih);
+struct nova_dentry *nova_find_dentry(struct super_block *sb,
+	struct nova_inode *pi, struct inode *inode, const char *name,
+	unsigned long name_len);
 
 /* rebuild.c */
 int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
