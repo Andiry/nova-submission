@@ -254,7 +254,7 @@ int nova_init_inode_table(struct super_block *sb);
 int nova_get_inode_address(struct super_block *sb, u64 ino,
 	u64 *pi_addr, int extendable);
 struct inode *nova_iget(struct super_block *sb, unsigned long ino);
-inline int nova_insert_inodetree(struct nova_sb_info *sbi,
+int nova_insert_inodetree(struct nova_sb_info *sbi,
 	struct nova_range_node *new_node, int cpu);
 u64 nova_new_nova_inode(struct super_block *sb, u64 *pi_addr);
 struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,

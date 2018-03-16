@@ -795,23 +795,23 @@ static void nova_put_super(struct super_block *sb)
 	sb->s_fs_info = NULL;
 }
 
-inline void nova_free_range_node(struct nova_range_node *node)
+void nova_free_range_node(struct nova_range_node *node)
 {
 	kmem_cache_free(nova_range_node_cachep, node);
 }
 
-inline void nova_free_inode_node(struct super_block *sb,
+void nova_free_inode_node(struct super_block *sb,
 	struct nova_range_node *node)
 {
 	nova_free_range_node(node);
 }
 
-inline void nova_free_file_write_item(struct nova_file_write_item *item)
+void nova_free_file_write_item(struct nova_file_write_item *item)
 {
 	kmem_cache_free(nova_file_write_item_cachep, item);
 }
 
-inline struct nova_file_write_item *
+struct nova_file_write_item *
 nova_alloc_file_write_item(struct super_block *sb)
 {
 	struct nova_file_write_item *p;
