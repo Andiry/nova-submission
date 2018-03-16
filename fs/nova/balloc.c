@@ -74,12 +74,12 @@ static void nova_init_free_list(struct super_block *sb,
 		free_list->block_end -= sbi->tail_reserved_blocks;
 }
 
-inline struct nova_range_node *nova_alloc_blocknode(struct super_block *sb)
+struct nova_range_node *nova_alloc_blocknode(struct super_block *sb)
 {
 	return nova_alloc_range_node(sb);
 }
 
-inline void nova_free_blocknode(struct super_block *sb,
+void nova_free_blocknode(struct super_block *sb,
 	struct nova_range_node *node)
 {
 	nova_free_range_node(node);
@@ -206,7 +206,7 @@ int nova_insert_range_node(struct rb_root *tree,
 	return 0;
 }
 
-inline int nova_insert_blocktree(struct nova_sb_info *sbi,
+int nova_insert_blocktree(struct nova_sb_info *sbi,
 	struct rb_root *tree, struct nova_range_node *new_node)
 {
 	int ret;
@@ -659,7 +659,7 @@ alloc:
 
 // Allocate data blocks.  The offset for the allocated block comes back in
 // blocknr.  Return the number of blocks allocated.
-inline int nova_new_data_blocks(struct super_block *sb,
+int nova_new_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long *blocknr,
 	unsigned long start_blk, unsigned int num,
 	enum nova_alloc_init zero, int cpu,
