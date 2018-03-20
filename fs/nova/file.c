@@ -673,7 +673,10 @@ ssize_t nova_cow_file_write(struct file *filp,
 static ssize_t nova_dax_file_write(struct file *filp, const char __user *buf,
 				   size_t len, loff_t *ppos)
 {
-	if (inplace_data_updates)
+	struct address_space *mapping = filp->f_mapping;
+	struct inode *inode = mapping->host;
+
+	if (test_opt(inode->i_sb, INPLACE))
 		return nova_inplace_file_write(filp, buf, len, ppos);
 	else
 		return nova_cow_file_write(filp, buf, len, ppos);

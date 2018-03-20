@@ -43,13 +43,9 @@
 
 int measure_timing;
 int support_clwb;
-int inplace_data_updates;
 
 module_param(measure_timing, int, 0444);
 MODULE_PARM_DESC(measure_timing, "Timing measurement");
-
-module_param(inplace_data_updates, int, 0444);
-MODULE_PARM_DESC(inplace_data_updates, "Perform data updates in-place (i.e., not atomically)");
 
 module_param(nova_dbgmask, int, 0444);
 MODULE_PARM_DESC(nova_dbgmask, "Control debugging output");
@@ -164,7 +160,7 @@ static loff_t nova_max_size(int bits)
 
 enum {
 	Opt_bpi, Opt_init, Opt_mode, Opt_uid,
-	Opt_gid, Opt_dax,
+	Opt_gid, Opt_dax, Opt_inplace,
 	Opt_err_cont, Opt_err_panic, Opt_err_ro,
 	Opt_dbgmask, Opt_err
 };
@@ -176,6 +172,7 @@ static const match_table_t tokens = {
 	{ Opt_uid,	     "uid=%u"		  },
 	{ Opt_gid,	     "gid=%u"		  },
 	{ Opt_dax,	     "dax"		  },
+	{ Opt_inplace,	     "inplace"		  },
 	{ Opt_err_cont,	     "errors=continue"	  },
 	{ Opt_err_panic,     "errors=panic"	  },
 	{ Opt_err_ro,	     "errors=remount-ro"  },
@@ -249,6 +246,10 @@ static int nova_parse_options(char *options, struct nova_sb_info *sbi,
 			break;
 		case Opt_dax:
 			set_opt(sbi->s_mount_opt, DAX);
+			break;
+		case Opt_inplace:
+			set_opt(sbi->s_mount_opt, INPLACE);
+			nova_info("Enable inplace updates\n");
 			break;
 		case Opt_dbgmask:
 			if (match_int(&args[0], &option))
@@ -545,8 +546,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
-	nova_dbg("measure timing %d, inplace data update %d\n",
-			measure_timing, inplace_data_updates);
+	nova_dbg("measure timing %d\n", measure_timing);
 
 	get_random_bytes(&random, sizeof(u32));
 	atomic_set(&sbi->next_generation, random);

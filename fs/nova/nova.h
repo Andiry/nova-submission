@@ -138,7 +138,6 @@ extern unsigned int nova_dbgmask;
 
 
 extern int measure_timing;
-extern int inplace_data_updates;
 
 
 extern unsigned int blk_type_to_shift[NOVA_BLOCK_TYPE_MAX];
