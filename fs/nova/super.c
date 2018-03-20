@@ -596,7 +596,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 		goto out;
 	}
 
-	nova_sysfs_init(sb);
+	nova_procfs_init(sb);
 
 	/* Init a new nova instance */
 	if (sbi->s_mount_opt & NOVA_MOUNT_FORMAT) {
@@ -682,7 +682,7 @@ out:
 	kfree(sbi->inode_maps);
 	sbi->inode_maps = NULL;
 
-	nova_sysfs_exit(sb);
+	nova_procfs_exit(sb);
 
 	kfree(sbi->nova_sb);
 	kfree(sbi);
@@ -787,7 +787,7 @@ static void nova_put_super(struct super_block *sb)
 			i, inode_map->allocated, inode_map->freed);
 	}
 
-	nova_sysfs_exit(sb);
+	nova_procfs_exit(sb);
 
 	kfree(sbi->inode_maps);
 	kfree(sbi->nova_sb);

@@ -493,6 +493,12 @@ extern const struct inode_operations nova_dir_inode_operations;
 extern const struct inode_operations nova_special_inode_operations;
 extern struct dentry *nova_get_parent(struct dentry *child);
 
+/* procfs.c */
+extern const char *proc_dirname;
+extern struct proc_dir_entry *nova_proc_root;
+void nova_procfs_init(struct super_block *sb);
+void nova_procfs_exit(struct super_block *sb);
+
 /* rebuild.c */
 int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_inode *pi, u64 pi_addr,
@@ -504,12 +510,6 @@ int nova_rebuild_inode(struct super_block *sb, struct nova_inode_info *si,
 int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, const char *symname, int len, u64 epoch_id);
 extern const struct inode_operations nova_symlink_inode_operations;
-
-/* sysfs.c */
-extern const char *proc_dirname;
-extern struct proc_dir_entry *nova_proc_root;
-void nova_sysfs_init(struct super_block *sb);
-void nova_sysfs_exit(struct super_block *sb);
 
 /* stats.c */
 void nova_get_timing_stats(void);
