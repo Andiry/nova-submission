@@ -344,7 +344,7 @@ static const struct file_operations nova_seq_gc_fops = {
 };
 
 /* ====================== Setup/teardown======================== */
-void nova_sysfs_init(struct super_block *sb)
+void nova_procfs_init(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
@@ -364,7 +364,7 @@ void nova_sysfs_init(struct super_block *sb)
 	}
 }
 
-void nova_sysfs_exit(struct super_block *sb)
+void nova_procfs_exit(struct super_block *sb)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 
