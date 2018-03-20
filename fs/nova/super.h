@@ -58,21 +58,22 @@ struct nova_super_block {
 /* ======================= Reserved inodes ========================= */
 
 /* We have space for 31 reserved inodes */
-#define NOVA_ROOT_INO		(1)
-#define NOVA_INODETABLE_INO	(2)	/* Fake inode associated with inode
-					 * stroage.  We need this because our
-					 * allocator requires inode to be
-					 * associated with each allocation.
-					 * The data actually lives in linked
-					 * lists in INODE_TABLE_START. */
-#define NOVA_BLOCKNODE_INO	(3)     /* Storage for allocator state */
-#define NOVA_LITEJOURNAL_INO	(4)     /* Storage for lightweight journals */
-#define NOVA_INODELIST_INO	(5)     /* Storage for Inode free list */
+enum {
+	NOVA_ROOT_INO = 1,	/* Root inode */
+	NOVA_INODETABLE_INO,	/* Fake inode associated with inode
+				 * stroage.  We need this because our
+				 * allocator requires inode to be
+				 * associated with each allocation.
+				 * The data actually lives in linked
+				 * lists in INODE_TABLE_START. */
+	NOVA_BLOCKNODE_INO,	/* Storage for allocator state */
+	NOVA_LITEJOURNAL_INO,	/* Storage for lightweight journals */
+	NOVA_INODELIST_INO	/* Storage for Inode free list */
+};
 
 
 /* Normal inode starts at 32 */
 #define NOVA_NORMAL_INODE_START      (32)
-
 
 
 /*
