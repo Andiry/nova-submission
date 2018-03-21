@@ -511,7 +511,7 @@ out:
 const struct file_operations nova_dir_operations = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
-	.iterate	= nova_readdir,
+	.iterate_shared	= nova_readdir,
 	.fsync		= noop_fsync,
 	.unlocked_ioctl = nova_ioctl,
 #ifdef CONFIG_COMPAT
