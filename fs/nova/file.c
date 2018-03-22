@@ -240,7 +240,7 @@ next:
 
 	if (ret || (mode & FALLOC_FL_KEEP_SIZE)) {
 		pi->i_flags |= cpu_to_le32(NOVA_EOFBLOCKS_FL);
-		sih->i_flags |= cpu_to_le32(NOVA_EOFBLOCKS_FL);
+		sih->i_flags |= NOVA_EOFBLOCKS_FL;
 	}
 
 	if (!(mode & FALLOC_FL_KEEP_SIZE) && new_size > inode->i_size) {
@@ -574,14 +574,14 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 		/* Now copy from user buf */
 		//		nova_dbg("Write: %p\n", kmem);
 		NOVA_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-		copied = bytes - memcpy_to_pmem_nocache(kmem + offset,
+		copied = bytes - __copy_from_user_inatomic_nocache(kmem + offset,
 						buf, bytes);
 		NOVA_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
 		if (pos + copied > inode->i_size)
-			file_size = cpu_to_le64(pos + copied);
+			file_size = pos + copied;
 		else
-			file_size = cpu_to_le64(inode->i_size);
+			file_size = inode->i_size;
 
 		entry_item = nova_alloc_file_write_item(sb);
 		if (!entry_item) {
