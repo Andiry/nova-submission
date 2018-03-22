@@ -225,8 +225,8 @@ static int nova_init_inode_list_from_inode(struct super_block *sb)
 			goto out;
 		}
 
-		range_node->range_low = entry->range_low & ~CPUID_MASK;
-		range_node->range_high = entry->range_high;
+		range_node->range_low = le64_to_cpu(entry->range_low) & ~CPUID_MASK;
+		range_node->range_high = le64_to_cpu(entry->range_high);
 		ret = nova_insert_inodetree(sbi, range_node, cpuid);
 		if (ret) {
 			nova_err(sb, "%s failed, %d\n", __func__, cpuid);
