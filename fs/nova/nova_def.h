@@ -40,7 +40,6 @@
 #define NOVA_MOUNT_HUGEIOREMAP  0x000100    /* Huge mappings with ioremap */
 #define NOVA_MOUNT_FORMAT       0x000200    /* was FS formatted on mount? */
 #define NOVA_MOUNT_INPLACE	0x000400    /* Inplace updates */
-#define NOVA_MOUNT_RBTREE_DIR	0x000800    /* Use RB tree for directory */
 
 /*
  * Maximal count of links to a file

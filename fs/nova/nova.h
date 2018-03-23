@@ -298,10 +298,12 @@ struct nova_range_node_lowhigh {
 struct nova_range_node {
 	struct rb_node node;
 	union {
+		/* Block, inode */
 		struct {
 			unsigned long range_low;
 			unsigned long range_high;
 		};
+		/* Dir node */
 		struct {
 			unsigned long hash;
 			void *direntry;
