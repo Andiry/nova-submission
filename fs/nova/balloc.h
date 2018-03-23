@@ -74,8 +74,8 @@ void nova_free_blocknode(struct super_block *sb,
 	struct nova_range_node *bnode);
 extern void nova_init_blockmap(struct super_block *sb, int recovery);
 extern unsigned long nova_count_free_blocks(struct super_block *sb);
-int nova_insert_blocktree(struct nova_sb_info *sbi,
-	struct rb_root *tree, struct nova_range_node *new_node);
+int nova_insert_blocktree(struct rb_root *tree,
+	struct nova_range_node *new_node);
 extern int nova_free_data_blocks(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long blocknr, int num);
 extern int nova_free_log_blocks(struct super_block *sb,
@@ -90,14 +90,12 @@ extern int nova_new_log_blocks(struct super_block *sb,
 	unsigned long *blocknr, unsigned int num,
 	enum nova_alloc_init zero, int cpu,
 	enum nova_alloc_direction from_tail);
-int nova_find_free_slot(struct nova_sb_info *sbi,
-	struct rb_root *tree, unsigned long range_low,
+int nova_find_free_slot(struct rb_root *tree, unsigned long range_low,
 	unsigned long range_high, struct nova_range_node **prev,
 	struct nova_range_node **next);
 
 extern int nova_insert_range_node(struct rb_root *tree,
 	struct nova_range_node *new_node, enum node_type type);
-extern int nova_find_range_node(struct nova_sb_info *sbi,
-	struct rb_root *tree, unsigned long key, enum node_type type,
-	struct nova_range_node **ret_node);
+extern int nova_find_range_node(struct rb_root *tree, unsigned long key,
+	enum node_type type, struct nova_range_node **ret_node);
 #endif
