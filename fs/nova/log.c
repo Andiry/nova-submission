@@ -359,7 +359,7 @@ static int nova_inplace_update_log_entry(struct super_block *sb,
 	NOVA_START_TIMING(update_entry_t, update_time);
 	size = nova_get_log_entry_size(sb, type);
 
-	cpu = smp_processor_id();
+	cpu = nova_get_cpuid(sb);
 	spin_lock(&sbi->journal_locks[cpu]);
 	journal_tail = nova_create_logentry_transaction(sb, entry, type, cpu);
 	nova_update_log_entry(sb, inode, entry, entry_info);
