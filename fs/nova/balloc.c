@@ -79,8 +79,7 @@ struct nova_range_node *nova_alloc_blocknode(struct super_block *sb)
 	return nova_alloc_range_node(sb);
 }
 
-void nova_free_blocknode(struct super_block *sb,
-	struct nova_range_node *node)
+void nova_free_blocknode(struct nova_range_node *node)
 {
 	nova_free_range_node(node);
 }
@@ -114,7 +113,7 @@ void nova_init_blockmap(struct super_block *sb, int recovery)
 			ret = nova_insert_blocktree(tree, blknode);
 			if (ret) {
 				nova_err(sb, "%s failed\n", __func__);
-				nova_free_blocknode(sb, blknode);
+				nova_free_blocknode(blknode);
 				return;
 			}
 			free_list->first_node = blknode;
@@ -351,7 +350,7 @@ static int nova_free_blocks(struct super_block *sb, unsigned long blocknr,
 		prev->range_high = next->range_high;
 		if (free_list->last_node == next)
 			free_list->last_node = prev;
-		nova_free_blocknode(sb, next);
+		nova_free_blocknode(next);
 		goto block_found;
 	}
 	if (prev && (block_low == prev->range_high + 1)) {
@@ -395,7 +394,7 @@ block_found:
 out:
 	spin_unlock(&free_list->s_lock);
 	if (new_node_used == 0)
-		nova_free_blocknode(sb, curr_node);
+		nova_free_blocknode(curr_node);
 
 	NOVA_END_TIMING(free_blocks_t, free_time);
 	return ret;
@@ -529,7 +528,7 @@ static long nova_alloc_blocks_in_free_list(struct super_block *sb,
 			free_list->num_blocknode--;
 			num_blocks = curr_blocks;
 			*new_blocknr = curr->range_low;
-			nova_free_blocknode(sb, curr);
+			nova_free_blocknode(curr);
 			found = 1;
 			break;
 		}

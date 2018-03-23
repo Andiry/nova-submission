@@ -56,7 +56,7 @@ int nova_init_inode_inuse_list(struct super_block *sb)
 		ret = nova_insert_inodetree(sbi, range_node, i);
 		if (ret) {
 			nova_err(sb, "%s failed\n", __func__);
-			nova_free_inode_node(sb, range_node);
+			nova_free_inode_node(range_node);
 			return ret;
 		}
 		inode_map->num_range_node_inode = 1;
@@ -542,7 +542,7 @@ static int nova_alloc_unused_inode(struct super_block *sb, int cpuid,
 		/* Fill the gap completely */
 		i->range_high = next_i->range_high;
 		rb_erase(&next_i->node, &inode_map->inode_inuse_tree);
-		nova_free_inode_node(sb, next_i);
+		nova_free_inode_node(next_i);
 		inode_map->num_range_node_inode--;
 	} else if (new_ino < (next_range_low - 1)) {
 		/* Aligns to left */
@@ -586,7 +586,7 @@ static int nova_free_inuse_inode(struct super_block *sb, unsigned long ino)
 	if ((internal_ino == i->range_low) && (internal_ino == i->range_high)) {
 		/* fits entire node */
 		rb_erase(&i->node, &inode_map->inode_inuse_tree);
-		nova_free_inode_node(sb, i);
+		nova_free_inode_node(i);
 		inode_map->num_range_node_inode--;
 		goto block_found;
 	}
@@ -615,7 +615,7 @@ static int nova_free_inuse_inode(struct super_block *sb, unsigned long ino)
 
 		ret = nova_insert_inodetree(sbi, curr_node, cpuid);
 		if (ret) {
-			nova_free_inode_node(sb, curr_node);
+			nova_free_inode_node(curr_node);
 			goto err;
 		}
 		inode_map->num_range_node_inode++;

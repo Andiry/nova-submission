@@ -162,11 +162,12 @@ static inline struct nova_super_block *nova_get_super(struct super_block *sb)
 extern void nova_error_mng(struct super_block *sb, const char *fmt, ...);
 extern struct nova_range_node *nova_alloc_range_node(struct super_block *sb);
 extern struct nova_range_node *nova_alloc_inode_node(struct super_block *sb);
+extern struct nova_range_node *nova_alloc_dir_node(struct super_block *sb);
 extern struct nova_file_write_item *
 nova_alloc_file_write_item(struct super_block *sb);
 extern void nova_free_range_node(struct nova_range_node *node);
-extern void nova_free_inode_node(struct super_block *sb,
-	struct nova_range_node *node);
+extern void nova_free_inode_node(struct nova_range_node *node);
+extern void nova_free_dir_node(struct nova_range_node *node);
 void nova_free_file_write_item(struct nova_file_write_item *item);
 
 #endif
