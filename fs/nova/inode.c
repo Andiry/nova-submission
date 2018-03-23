@@ -447,7 +447,7 @@ int nova_insert_inodetree(struct nova_sb_info *sbi,
 	int ret;
 
 	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
-	ret = nova_insert_range_node(tree, new_node);
+	ret = nova_insert_range_node(tree, new_node, NODE_INODE);
 	if (ret)
 		nova_dbg("ERROR: %s failed %d\n", __func__, ret);
 
@@ -464,7 +464,8 @@ static inline int nova_search_inodetree(struct nova_sb_info *sbi,
 	cpu = ino % sbi->cpus;
 	tree = &sbi->inode_maps[cpu].inode_inuse_tree;
 	internal_ino = ino / sbi->cpus;
-	return nova_find_range_node(sbi, tree, internal_ino, ret_node);
+	return nova_find_range_node(sbi, tree, internal_ino,
+			NODE_INODE, ret_node);
 }
 
 static void nova_get_inode_flags(struct inode *inode, struct nova_inode *pi)
