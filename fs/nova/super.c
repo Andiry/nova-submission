@@ -801,8 +801,12 @@ void nova_free_range_node(struct nova_range_node *node)
 	kmem_cache_free(nova_range_node_cachep, node);
 }
 
-void nova_free_inode_node(struct super_block *sb,
-	struct nova_range_node *node)
+void nova_free_inode_node(struct nova_range_node *node)
+{
+	nova_free_range_node(node);
+}
+
+void nova_free_dir_node(struct nova_range_node *node)
 {
 	nova_free_range_node(node);
 }
@@ -815,23 +819,20 @@ void nova_free_file_write_item(struct nova_file_write_item *item)
 struct nova_file_write_item *
 nova_alloc_file_write_item(struct super_block *sb)
 {
-	struct nova_file_write_item *p;
-
-	p = (struct nova_file_write_item *)
-		kmem_cache_alloc(nova_file_write_item_cachep, GFP_NOFS);
-	return p;
+	return kmem_cache_alloc(nova_file_write_item_cachep, GFP_NOFS);
 }
 
-inline struct nova_range_node *nova_alloc_range_node(struct super_block *sb)
+struct nova_range_node *nova_alloc_range_node(struct super_block *sb)
 {
-	struct nova_range_node *p;
-
-	p = (struct nova_range_node *)
-		kmem_cache_zalloc(nova_range_node_cachep, GFP_NOFS);
-	return p;
+	return kmem_cache_zalloc(nova_range_node_cachep, GFP_NOFS);
 }
 
-inline struct nova_range_node *nova_alloc_inode_node(struct super_block *sb)
+struct nova_range_node *nova_alloc_inode_node(struct super_block *sb)
+{
+	return nova_alloc_range_node(sb);
+}
+
+struct nova_range_node *nova_alloc_dir_node(struct super_block *sb)
 {
 	return nova_alloc_range_node(sb);
 }

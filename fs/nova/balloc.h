@@ -70,8 +70,7 @@ enum node_type {
 int nova_alloc_block_free_lists(struct super_block *sb);
 void nova_delete_free_lists(struct super_block *sb);
 struct nova_range_node *nova_alloc_blocknode(struct super_block *sb);
-void nova_free_blocknode(struct super_block *sb,
-	struct nova_range_node *bnode);
+void nova_free_blocknode(struct nova_range_node *bnode);
 extern void nova_init_blockmap(struct super_block *sb, int recovery);
 extern unsigned long nova_count_free_blocks(struct super_block *sb);
 int nova_insert_blocktree(struct rb_root *tree,
