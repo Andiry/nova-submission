@@ -36,14 +36,10 @@ struct nova_dentry *nova_find_dentry(struct super_block *sb,
 
 	hash = BKDRHash(name, name_len);
 
-	if (test_opt(sb, RBTREE_DIR)) {
-		found = nova_find_range_node(&sih->rb_tree, hash,
+	found = nova_find_range_node(&sih->rb_tree, hash,
 				NODE_DIR, &ret_node);
-		if (found == 1 && hash == ret_node->hash)
-			direntry = ret_node->direntry;
-	} else {
-		direntry = radix_tree_lookup(&sih->tree, hash);
-	}
+	if (found == 1 && hash == ret_node->hash)
+		direntry = ret_node->direntry;
 
 	return direntry;
 }
@@ -60,21 +56,17 @@ int nova_insert_dir_tree(struct super_block *sb,
 	nova_dbgv("%s: insert %s hash %lu\n", __func__, name, hash);
 
 	/* FIXME: hash collision ignored here */
-	if (test_opt(sb, RBTREE_DIR)) {
-		node = nova_alloc_dir_node(sb);
-		if (!node)
-			return -ENOMEM;
-		node->hash = hash;
-		node->direntry = direntry;
-		ret = nova_insert_range_node(&sih->rb_tree, node, NODE_DIR);
-		if (ret)
-			nova_free_dir_node(node);
-	} else {
-		ret = radix_tree_insert(&sih->tree, hash, direntry);
-	}
+	node = nova_alloc_dir_node(sb);
+	if (!node)
+		return -ENOMEM;
 
-	if (ret)
+	node->hash = hash;
+	node->direntry = direntry;
+	ret = nova_insert_range_node(&sih->rb_tree, node, NODE_DIR);
+	if (ret) {
+		nova_free_dir_node(node);
 		nova_dbg("%s ERROR %d: %s\n", __func__, ret, name);
+	}
 
 	return ret;
 }
@@ -98,21 +90,17 @@ int nova_remove_dir_tree(struct super_block *sb,
 	int found = 0;
 
 	hash = BKDRHash(name, namelen);
-	if (test_opt(sb, RBTREE_DIR)) {
-		found = nova_find_range_node(&sih->rb_tree, hash,
+	found = nova_find_range_node(&sih->rb_tree, hash,
 				NODE_DIR, &ret_node);
-		if (found == 0) {
-			nova_dbg("%s target not found: %s, length %d, "
+	if (found == 0) {
+		nova_dbg("%s target not found: %s, length %d, "
 				"hash %lu\n", __func__, name, namelen, hash);
-			return -EINVAL;
-		}
-
-		entry = ret_node->direntry;
-		rb_erase(&ret_node->node, &sih->rb_tree);
-		nova_free_dir_node(ret_node);
-	} else {
-		entry = radix_tree_delete(&sih->tree, hash);
+		return -EINVAL;
 	}
+
+	entry = ret_node->direntry;
+	rb_erase(&ret_node->node, &sih->rb_tree);
+	nova_free_dir_node(ret_node);
 
 	if (replay == 0) {
 		if (!entry) {
@@ -140,57 +128,14 @@ int nova_remove_dir_tree(struct super_block *sb,
 	return 0;
 }
 
-static void nova_delete_dir_rbtree(struct super_block *sb,
-	struct nova_inode_info_header *sih)
-{
-	return nova_destroy_range_node_tree(sb, &sih->rb_tree);
-}
-
-static void nova_delete_dir_radix_tree(struct super_block *sb,
-	struct nova_inode_info_header *sih)
-{
-	struct nova_dentry *direntry;
-	unsigned long pos = 0;
-	struct nova_dentry *entries[FREE_BATCH];
-	int nr_entries;
-	int i;
-	void *ret;
-
-	do {
-		nr_entries = radix_tree_gang_lookup(&sih->tree,
-					(void **)entries, pos, FREE_BATCH);
-		for (i = 0; i < nr_entries; i++) {
-			direntry = entries[i];
-
-			pos = BKDRHash(direntry->name, direntry->name_len);
-			ret = radix_tree_delete(&sih->tree, pos);
-			if (!ret || ret != direntry) {
-				nova_err(sb, "dentry: type %d, inode %llu, "
-					"name %s, namelen %u, rec len %u\n",
-					direntry->entry_type,
-					le64_to_cpu(direntry->ino),
-					direntry->name, direntry->name_len,
-					le16_to_cpu(direntry->de_len));
-				if (!ret)
-					nova_dbg("ret is NULL\n");
-			}
-		}
-		pos++;
-	} while (nr_entries == FREE_BATCH);
-}
-
 void nova_delete_dir_tree(struct super_block *sb,
 	struct nova_inode_info_header *sih)
 {
 	timing_t delete_time;
 
 	NOVA_START_TIMING(delete_dir_tree_t, delete_time);
-
 	nova_dbgv("%s: delete dir %lu\n", __func__, sih->ino);
-	if (test_opt(sb, RBTREE_DIR))
-		nova_delete_dir_rbtree(sb, sih);
-	else
-		nova_delete_dir_radix_tree(sb, sih);
+	nova_destroy_range_node_tree(sb, &sih->rb_tree);
 	NOVA_END_TIMING(delete_dir_tree_t, delete_time);
 }
 
@@ -421,26 +366,15 @@ static u64 nova_find_next_dentry_addr(struct super_block *sb,
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_dentry *entry = NULL;
-	struct nova_dentry *entries[1];
 	struct nova_range_node *ret_node = NULL;
-	int nr_entries;
 	int found = 0;
 	u64 addr = 0;
 
-	if (test_opt(sb, RBTREE_DIR)) {
-		found = nova_find_range_node(&sih->rb_tree, pos,
-				NODE_DIR, &ret_node);
-		if (found == 1 && pos == ret_node->hash) {
-			entry = ret_node->direntry;
-			addr = nova_get_addr_off(sbi, entry);
-		}
-	} else {
-		nr_entries = radix_tree_gang_lookup(&sih->tree,
-					(void **)entries, pos, 1);
-		if (nr_entries == 1) {
-			entry = entries[0];
-			addr = nova_get_addr_off(sbi, entry);
-		}
+	found = nova_find_range_node(&sih->rb_tree, pos,
+					NODE_DIR, &ret_node);
+	if (found == 1 && pos == ret_node->hash) {
+		entry = ret_node->direntry;
+		addr = nova_get_addr_off(sbi, entry);
 	}
 
 	return addr;

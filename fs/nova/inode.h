@@ -71,14 +71,9 @@ struct inode_table {
  * NOVA-specific inode state kept in DRAM
  */
 struct nova_inode_info_header {
-	/* For files, tree holds a map from file offsets to
-	 * write log entries.
-	 *
-	 * For directories, tree holds a map from a hash of the file name to
-	 * dentry log entry.
-	 */
+	/* Map from file offsets to write log entries. */
 	struct radix_tree_root tree;
-	struct rb_root rb_tree;		/* If use RB tree for directory */
+	struct rb_root rb_tree;		/* RB tree for directory */
 	struct rw_semaphore i_sem;	/* Protect log and tree */
 	unsigned short i_mode;		/* Dir or file? */
 	unsigned int i_flags;
