@@ -441,6 +441,7 @@ static inline void set_default_opts(struct nova_sb_info *sbi)
 	sbi->head_reserved_blocks = HEAD_RESERVED_BLOCKS;
 	sbi->tail_reserved_blocks = TAIL_RESERVED_BLOCKS;
 	sbi->cpus = num_online_cpus();
+	nova_info("%d cpus online\n", sbi->cpus);
 	sbi->map_id = 0;
 }
 
@@ -1006,7 +1007,6 @@ static int __init init_nova_fs(void)
 
 	NOVA_START_TIMING(init_t, init_time);
 
-	nova_dbg("%s: %d cpus online\n", __func__, num_online_cpus());
 	if (arch_has_clwb())
 		support_clwb = 1;
 
