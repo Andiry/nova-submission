@@ -78,6 +78,7 @@ struct nova_inode_info_header {
 	 * dentry log entry.
 	 */
 	struct radix_tree_root tree;
+	struct rb_root rb_tree;		/* If use RB tree for directory */
 	struct rw_semaphore i_sem;	/* Protect log and tree */
 	unsigned short i_mode;		/* Dir or file? */
 	unsigned int i_flags;
