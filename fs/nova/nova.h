@@ -294,11 +294,19 @@ struct nova_range_node_lowhigh {
 
 #define	RANGENODE_PER_PAGE	254
 
-/* A node in the RB tree representing a range of pages */
+/* A range node can represent a range of pages/inodes, or a direntry node */
 struct nova_range_node {
 	struct rb_node node;
-	unsigned long range_low;
-	unsigned long range_high;
+	union {
+		struct {
+			unsigned long range_low;
+			unsigned long range_high;
+		};
+		struct {
+			unsigned long hash;
+			void *direntry;
+		};
+	};
 };
 
 #include "bbuild.h"
