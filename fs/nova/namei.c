@@ -488,7 +488,7 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	pidir = nova_get_inode(sb, dir);
 	sidir = NOVA_I(dir);
-	sih = &si->header;
+	sih = &sidir->header;
 	dir->i_blocks = sih->i_blocks;
 	inc_nlink(dir);
 	d_instantiate(dentry, inode);
