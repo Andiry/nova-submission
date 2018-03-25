@@ -27,8 +27,7 @@ struct nova_dentry *nova_find_dentry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, const char *name,
 	unsigned long name_len)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_dentry *direntry = NULL;
 	struct nova_range_node *ret_node = NULL;
 	unsigned long hash;
@@ -229,8 +228,7 @@ int nova_add_dentry(struct dentry *dentry, u64 ino, int inc_link,
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
-	struct nova_inode_info *si = NOVA_I(dir);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(dir);
 	struct nova_inode *pidir;
 	const char *name = dentry->d_name.name;
 	int namelen = dentry->d_name.len;
@@ -294,8 +292,7 @@ int nova_remove_dentry(struct dentry *dentry, int dec_link,
 	struct inode *dir = dentry->d_parent->d_inode;
 	struct super_block *sb = dir->i_sb;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_inode_info *si = NOVA_I(dir);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(dir);
 	struct nova_inode *pidir;
 	struct qstr *entry = &dentry->d_name;
 	struct nova_dentry *old_dentry = NULL;
@@ -385,8 +382,7 @@ static int nova_readdir(struct file *file, struct dir_context *ctx)
 	struct inode *inode = file_inode(file);
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pidir;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_inode *child_pi;
 	struct nova_inode *prev_child_pi = NULL;
 	struct nova_dentry *entry = NULL;

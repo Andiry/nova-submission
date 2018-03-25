@@ -181,8 +181,7 @@ static void nova_update_link_change_entry(struct inode *inode,
 	struct nova_link_change_entry *entry,
 	struct nova_log_entry_info *entry_info)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 
 	entry->entry_type	= LINK_CHANGE;
 	entry->epoch_id		= cpu_to_le64(entry_info->epoch_id);
@@ -378,8 +377,7 @@ static int nova_append_setattr_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode, struct iattr *attr,
 	struct nova_inode_update *update, u64 *last_setattr, u64 epoch_id)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_log_entry_info entry_info;
 	timing_t append_time;
 	int ret;
@@ -473,8 +471,7 @@ int nova_handle_setattr_operation(struct super_block *sb, struct inode *inode,
 	struct nova_inode *pi, unsigned int ia_valid, struct iattr *attr,
 	u64 epoch_id)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_inode_update update;
 	u64 last_setattr = 0;
 	int ret;
@@ -576,8 +573,7 @@ int nova_append_link_change_entry(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
 	struct nova_inode_update *update, u64 *old_linkc, u64 epoch_id)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_log_entry_info entry_info;
 	int ret = 0;
 	timing_t append_time;
@@ -694,8 +690,7 @@ int nova_append_file_write_entry(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct nova_file_write_item *item,
 	struct nova_inode_update *update)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_file_write_entry *data = &item->entry;
 	struct nova_log_entry_info entry_info;
 	timing_t append_time;
@@ -753,8 +748,7 @@ int nova_inplace_update_dentry(struct super_block *sb,
 	struct inode *dir, struct nova_dentry *dentry, int link_change,
 	u64 epoch_id)
 {
-	struct nova_inode_info *si = NOVA_I(dir);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(dir);
 	struct nova_log_entry_info entry_info;
 
 	entry_info.type = DIR_LOG;
@@ -772,8 +766,7 @@ int nova_append_dentry(struct super_block *sb, struct nova_inode *pi,
 	unsigned short de_len, struct nova_inode_update *update,
 	int link_change, u64 epoch_id)
 {
-	struct nova_inode_info *si = NOVA_I(dir);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(dir);
 	struct nova_log_entry_info entry_info;
 	timing_t append_time;
 	int ret;

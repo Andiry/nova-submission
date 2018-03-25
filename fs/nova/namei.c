@@ -214,7 +214,6 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 	int err = -ENAMETOOLONG;
 	unsigned int len = strlen(symname);
 	struct inode *inode;
-	struct nova_inode_info *si;
 	struct nova_inode_info_header *sih;
 	u64 pi_addr = 0;
 	struct nova_inode *pidir, *pi;
@@ -255,8 +254,7 @@ static int nova_symlink(struct inode *dir, struct dentry *dentry,
 
 	pi = nova_get_inode(sb, inode);
 
-	si = NOVA_I(inode);
-	sih = &si->header;
+	sih = NOVA_IH(inode);
 
 	err = nova_block_symlink(sb, pi, inode, symname, len, epoch_id);
 	if (err)
@@ -438,7 +436,6 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
 	struct nova_inode *pidir, *pi;
-	struct nova_inode_info *si, *sidir;
 	struct nova_inode_info_header *sih = NULL;
 	struct nova_inode_update update;
 	u64 pi_addr = 0;
@@ -482,13 +479,11 @@ static int nova_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out_err;
 
 	/* Build the dir tree */
-	si = NOVA_I(inode);
-	sih = &si->header;
+	sih = NOVA_IH(inode);
 	nova_rebuild_dir_inode_tree(sb, pi, pi_addr, sih);
 
 	pidir = nova_get_inode(sb, dir);
-	sidir = NOVA_I(dir);
-	sih = &sidir->header;
+	sih = NOVA_IH(dir);
 	dir->i_blocks = sih->i_blocks;
 	inc_nlink(dir);
 	d_instantiate(dentry, inode);
@@ -512,8 +507,7 @@ out_err:
 static int nova_empty_dir(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_range_node *curr;
 	struct nova_dentry *entry;
 	struct rb_node *temp;
@@ -539,8 +533,7 @@ static int nova_rmdir(struct inode *dir, struct dentry *dentry)
 	struct nova_inode_update update_dir;
 	struct nova_inode_update update;
 	u64 old_linkc = 0;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	int err = -ENOTEMPTY;
 	u64 epoch_id;
 	timing_t rmdir_time;

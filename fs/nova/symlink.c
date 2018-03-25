@@ -28,8 +28,7 @@ int nova_block_symlink(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, const char *symname, int len, u64 epoch_id)
 {
 	struct nova_file_write_item entry_item;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_inode_update update;
 	unsigned long name_blocknr = 0;
 	int allocated;
@@ -97,8 +96,7 @@ static int nova_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 	struct nova_file_write_entry *entry;
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	char *blockp;
 
 	entry = (struct nova_file_write_entry *)nova_get_block(sb,
@@ -114,8 +112,7 @@ static const char *nova_get_link(struct dentry *dentry, struct inode *inode,
 {
 	struct nova_file_write_entry *entry;
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	char *blockp;
 
 	entry = (struct nova_file_write_entry *)nova_get_block(sb,
