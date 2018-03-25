@@ -344,6 +344,10 @@ static inline unsigned long BKDRHash(const char *str, int length)
 	for (i = 0; i < length; i++)
 		hash = hash * seed + (*str++);
 
+	/* READDIR_END is reserved as sentinel */
+	if (hash == READDIR_END)
+		hash--;
+
 	return hash;
 }
 
