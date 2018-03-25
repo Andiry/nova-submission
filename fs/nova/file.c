@@ -26,8 +26,7 @@
 static loff_t nova_llseek(struct file *file, loff_t offset, int origin)
 {
 	struct inode *inode = file->f_path.dentry->d_inode;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	int retval;
 
 	if (origin != SEEK_DATA && origin != SEEK_HOLE)
@@ -118,8 +117,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 {
 	struct inode *inode = file->f_path.dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_inode *pi;
 	struct nova_file_write_entry *entry;
 	struct nova_file_write_item *entry_item;
@@ -284,8 +282,7 @@ static ssize_t nova_dax_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file->f_mapping->host;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	loff_t offset;
 	size_t count;
 	ssize_t ret;
@@ -329,8 +326,7 @@ do_dax_mapping_read(struct file *filp, char __user *buf,
 {
 	struct inode *inode = filp->f_mapping->host;
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_file_write_entry *entry;
 	pgoff_t index, end_index;
 	unsigned long offset;
@@ -451,8 +447,7 @@ static ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 			    size_t len, loff_t *ppos)
 {
 	struct inode *inode = filp->f_mapping->host;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	ssize_t res;
 	timing_t dax_read_time;
 
@@ -474,8 +469,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode	*inode = mapping->host;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi;
 	struct nova_file_write_item *entry_item;

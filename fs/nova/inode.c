@@ -161,8 +161,7 @@ static void nova_truncate_file_blocks(struct inode *inode, loff_t start,
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	int freed = 0;
@@ -243,9 +242,8 @@ done:
 static int nova_read_inode(struct super_block *sb, struct inode *inode,
 	u64 pi_addr)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
 	struct nova_inode *pi, fake_pi;
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	int ret = -EIO;
 	unsigned long ino;
 
@@ -832,8 +830,7 @@ void nova_evict_inode(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	timing_t evict_time;
 	int destroy = 0;
 	int ret;
@@ -939,7 +936,6 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	struct nova_sb_info *sbi;
 	struct inode *inode;
 	struct nova_inode *diri = NULL;
-	struct nova_inode_info *si;
 	struct nova_inode_info_header *sih = NULL;
 	struct nova_inode *pi;
 	int errval;
@@ -1010,8 +1006,7 @@ struct inode *nova_new_vfs_inode(enum nova_new_inode_type type,
 	pi->create_epoch_id = epoch_id;
 	nova_init_inode(inode, pi);
 
-	si = NOVA_I(inode);
-	sih = &si->header;
+	sih = NOVA_IH(inode);
 	nova_init_header(sb, sih, inode->i_mode);
 	sih->pi_addr = pi_addr;
 	sih->ino = ino;
@@ -1055,8 +1050,7 @@ int nova_write_inode(struct inode *inode, struct writeback_control *wbc)
 void nova_dirty_inode(struct inode *inode, int flags)
 {
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_inode *pi;
 
 	pi = nova_get_block(sb, sih->pi_addr);
@@ -1078,8 +1072,7 @@ static void nova_clear_last_page_tail(struct super_block *sb,
 	struct inode *inode, loff_t newsize)
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	unsigned long offset = newsize & (sb->s_blocksize - 1);
 	unsigned long pgoff, length;
 	u64 nvmm;
@@ -1103,8 +1096,7 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize,
 	u64 epoch_id)
 {
 	struct super_block *sb = inode->i_sb;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	timing_t setsize_time;
 
 	/* We only support truncate regular file */
@@ -1146,8 +1138,7 @@ int nova_getattr(const struct path *path, struct kstat *stat,
 		 u32 request_mask, unsigned int query_flags)
 {
 	struct inode *inode = d_inode(path->dentry);
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	unsigned int flags = sih->i_flags;
 
 	if (flags & FS_APPEND_FL)
@@ -1168,8 +1159,7 @@ int nova_getattr(const struct path *path, struct kstat *stat,
 int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 {
 	struct inode *inode = dentry->d_inode;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi = nova_get_inode(sb, inode);
 	int ret;
@@ -1226,8 +1216,7 @@ out:
  */
 unsigned long nova_find_region(struct inode *inode, loff_t *offset, int hole)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	unsigned long first_blocknr, last_blocknr;
 	unsigned long blocks = 0, offset_in_block;

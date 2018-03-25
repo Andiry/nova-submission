@@ -277,7 +277,7 @@ static ssize_t nova_seq_gc(struct file *filp, const char __user *buf,
 	struct super_block *sb = PDE_DATA(inode);
 	struct inode *target_inode;
 	struct nova_inode *target_pi;
-	struct nova_inode_info *target_sih;
+	struct nova_inode_info_header *target_sih;
 
 	int ret;
 	char *_buf;
@@ -320,12 +320,12 @@ static ssize_t nova_seq_gc(struct file *filp, const char __user *buf,
 		goto out;
 	}
 
-	target_sih = NOVA_I(target_inode);
+	target_sih = NOVA_IH(target_inode);
 
 	nova_info("%s: got inode %llu @ 0x%p; pi=0x%p\n", __func__,
 		  target_inode_number, target_inode, target_pi);
 
-	nova_inode_log_fast_gc(sb, target_pi, &target_sih->header,
+	nova_inode_log_fast_gc(sb, target_pi, target_sih,
 			       0, 0, 0, 1);
 	iput(target_inode);
 

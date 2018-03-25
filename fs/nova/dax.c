@@ -79,8 +79,7 @@ static inline int nova_handle_partial_block(struct super_block *sb,
 int nova_handle_head_tail_blocks(struct super_block *sb,
 	struct inode *inode, loff_t pos, size_t count, void *kmem)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	size_t offset, eblk_offset;
 	unsigned long start_blk, end_blk, num_blocks;
 	struct nova_file_write_entry *entry;
@@ -168,8 +167,7 @@ int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct list_head *head, unsigned long new_blocks,
 	int free)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_file_write_item *entry_item, *temp;
 	struct nova_inode_update update;
 	unsigned int data_bits;
@@ -270,8 +268,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 	int check_next, u64 epoch_id,
 	int *inplace)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_file_write_entry *entry;
 	unsigned long next_pgoff;
 	unsigned long ent_blks = 0;
@@ -336,8 +333,7 @@ static int nova_inplace_memcpy(struct super_block *sb, struct inode *inode,
 	struct nova_file_write_entry *from, struct nova_file_write_entry *to,
 	unsigned long num_blocks, loff_t pos, size_t len)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_log_entry_info entry_info;
 	unsigned long pgoff;
 	unsigned long from_nvmm, to_nvmm;
@@ -386,8 +382,7 @@ static int nova_commit_inplace_writes_to_log(struct super_block *sb,
 	struct list_head *head, unsigned long new_blocks,
 	loff_t pos, size_t len)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_file_write_item *entry_item, *temp;
 	struct nova_file_write_item *new_item;
 	struct nova_file_write_entry *curr, *entry;
@@ -500,8 +495,7 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode	*inode = mapping->host;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi;
 	struct nova_file_write_entry *entry;
@@ -743,8 +737,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 {
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi;
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_file_write_entry *entry = NULL;
 	struct nova_file_write_item entry_item;
 	struct list_head item_head;

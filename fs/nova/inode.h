@@ -122,6 +122,12 @@ static inline struct nova_inode_info *NOVA_I(struct inode *inode)
 	return container_of(inode, struct nova_inode_info, vfs_inode);
 }
 
+static inline struct nova_inode_info_header *NOVA_IH(struct inode *inode)
+{
+	struct nova_inode_info *si = NOVA_I(inode);
+	return &si->header;
+}
+
 static inline void sih_lock(struct nova_inode_info_header *header)
 {
 	down_write(&header->i_sem);
@@ -159,8 +165,7 @@ static inline void nova_update_inode(struct super_block *sb,
 	struct inode *inode, struct nova_inode *pi,
 	struct nova_inode_update *update)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 
 	sih->log_tail = update->tail;
 	nova_update_tail(pi, update->tail);
@@ -223,8 +228,7 @@ static inline struct nova_inode *nova_get_inode_by_ino(struct super_block *sb,
 static inline struct nova_inode *nova_get_inode(struct super_block *sb,
 	struct inode *inode)
 {
-	struct nova_inode_info *si = NOVA_I(inode);
-	struct nova_inode_info_header *sih = &si->header;
+	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_inode fake_pi;
 	void *addr;
 	int rc;
