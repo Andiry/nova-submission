@@ -254,6 +254,7 @@ void nova_init_file_write_item(struct super_block *sb,
 	entry->block = cpu_to_le64(nova_get_block_off(sb, blocknr,
 							sih->i_blk_type));
 	entry->mtime = cpu_to_le32(time);
+	entry->counter = 0;
 
 	entry->size = file_size;
 }
