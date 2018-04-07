@@ -358,8 +358,36 @@ nova_get_write_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, unsigned long blocknr)
 {
 	struct nova_file_write_entry *entry;
+	void **entryp;
 
-	entry = radix_tree_lookup(&sih->tree, blocknr);
+	rcu_read_lock();
+repeat:
+	entry = NULL;
+	entryp = radix_tree_lookup_slot(&sih->tree, blocknr);
+	if (entryp) {
+		entry = radix_tree_deref_slot(entryp);
+		if (unlikely(!entry))
+			goto out;
+
+		if (radix_tree_exception(entry)) {
+			if (radix_tree_deref_retry(entry))
+				goto repeat;
+
+			/* FIXME: What to do here? */
+			entry = NULL;
+			goto out;
+		}
+
+//		if (!get_write_entry(entry))
+//			goto repeat;
+
+		if (unlikely(entry != *entryp)) {
+//			put_write_entry(entry);
+			goto repeat;
+		}
+	}
+out:
+	rcu_read_unlock();
 
 	return entry;
 }

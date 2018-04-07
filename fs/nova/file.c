@@ -414,6 +414,9 @@ memcpy:
 
 		NOVA_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
 
+//		if (entry)
+//			put_write_entry(entry);
+
 		if (left) {
 			nova_dbg("%s ERROR!: bytes %lu, left %lu\n",
 				__func__, nr, left);
