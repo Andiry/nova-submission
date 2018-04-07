@@ -134,15 +134,37 @@ unsigned int nova_free_old_entry(struct super_block *sb,
 struct nova_file_write_entry *nova_find_next_entry(struct super_block *sb,
 	struct nova_inode_info_header *sih, pgoff_t pgoff)
 {
-	struct nova_file_write_entry *entry = NULL;
-	struct nova_file_write_entry *entries[1];
+	struct nova_file_write_entry *entry;
+	void **entryp = NULL;
 	int nr_entries;
 
-	nr_entries = radix_tree_gang_lookup(&sih->tree,
-					(void **)entries, pgoff, 1);
-	if (nr_entries == 1)
-		entry = entries[0];
+	rcu_read_lock();
+repeat:
+	entry = NULL;
+	nr_entries = radix_tree_gang_lookup_slot(&sih->tree,
+					&entryp, NULL, pgoff, 1);
+	if (!entryp)
+		goto out;
 
+	entry = radix_tree_deref_slot(entryp);
+	if (unlikely(!entry))
+		goto out;
+
+	if (radix_tree_exception(entry)) {
+		if (radix_tree_deref_retry(entry))
+			goto repeat;
+
+		entry = NULL;
+		goto out;
+	}
+
+	if (unlikely(entry != *entryp)) {
+//		put_write_entry(entry);
+		goto repeat;
+	}
+
+out:
+	rcu_read_unlock();
 	return entry;
 }
 
