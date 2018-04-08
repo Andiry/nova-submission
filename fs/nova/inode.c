@@ -843,6 +843,7 @@ void nova_evict_inode(struct inode *inode)
 		goto out;
 	}
 
+	sih_lock(sih);
 	// pi can be NULL if the file has already been deleted, but a handle
 	// remains.
 	if (pi && pi->nova_ino != inode->i_ino) {
@@ -884,6 +885,7 @@ out:
 	 */
 	truncate_inode_pages(&inode->i_data, 0);
 
+	sih_unlock(sih);
 	clear_inode(inode);
 	NOVA_END_TIMING(evict_inode_t, evict_time);
 }
