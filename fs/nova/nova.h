@@ -378,11 +378,11 @@ repeat:
 			goto out;
 		}
 
-//		if (!get_write_entry(entry))
-//			goto repeat;
+		if (!get_write_entry(entry))
+			goto repeat;
 
 		if (unlikely(entry != *entryp)) {
-//			put_write_entry(entry);
+			put_write_entry(entry);
 			goto repeat;
 		}
 	}

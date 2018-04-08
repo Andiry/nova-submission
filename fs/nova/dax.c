@@ -104,6 +104,9 @@ int nova_handle_head_tail_blocks(struct super_block *sb,
 		entry = nova_get_write_entry(sb, sih, start_blk);
 		ret = nova_handle_partial_block(sb, sih, entry,
 						start_blk, 0, offset, kmem);
+		if (entry)
+			put_write_entry(entry);
+
 		if (ret < 0)
 			return ret;
 	}
@@ -120,6 +123,9 @@ int nova_handle_head_tail_blocks(struct super_block *sb,
 						eblk_offset,
 						sb->s_blocksize - eblk_offset,
 						kmem);
+		if (entry)
+			put_write_entry(entry);
+
 		if (ret < 0)
 			return ret;
 	}
@@ -426,6 +432,7 @@ again:
 			new_blocks -= ent_blks;
 			nova_inplace_memcpy(sb, inode, curr, entry, ent_blks,
 						pos, len);
+			put_write_entry(entry);
 			if (ent_blks == num_blocks) {
 				/* Full copy */
 				nova_free_data_blocks(sb, sih, blocknr,
@@ -578,6 +585,9 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 			blk_off = blocknr << PAGE_SHIFT;
 			allocated = ent_blks;
 		} else {
+			if (entry)
+				put_write_entry(entry);
+
 			/* Allocate blocks to fill hole */
 			allocated = nova_new_data_blocks(sb, sih, &blocknr,
 					 start_blk, ent_blks, ALLOC_NO_INIT,
@@ -656,6 +666,7 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 
 			nova_inplace_update_write_entry(sb, inode, entry,
 							&entry_info);
+			put_write_entry(entry);
 		}
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);
@@ -780,8 +791,10 @@ again:
 			nvmm = get_nvmm(sb, sih, entry, iblock);
 			nova_dbgv("%s: found pgoff %lu, block %lu\n",
 					__func__, iblock, nvmm);
+			put_write_entry(entry);
 			goto out;
 		}
+		put_write_entry(entry);
 	}
 
 	if (create == 0) {

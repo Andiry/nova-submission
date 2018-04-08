@@ -213,9 +213,10 @@ static int nova_lookup_hole_in_range(struct super_block *sb,
 	pgoff = first_blocknr;
 	while (pgoff <= last_blocknr) {
 		old_pgoff = pgoff;
-		entry = radix_tree_lookup(&sih->tree, pgoff);
+		entry = nova_get_write_entry(sb, sih, pgoff);
 		if (entry) {
 			*data_found = 1;
+			put_write_entry(entry);
 			if (!hole)
 				goto done;
 			pgoff++;
@@ -228,6 +229,7 @@ static int nova_lookup_hole_in_range(struct super_block *sb,
 					pgoff : entry->pgoff;
 				if (pgoff > last_blocknr)
 					pgoff = last_blocknr + 1;
+				put_write_entry(entry);
 			}
 		}
 
@@ -735,6 +737,7 @@ int nova_delete_file_tree(struct super_block *sb,
 
 			pgoff++;
 			pgoff = pgoff > entry->pgoff ? pgoff : entry->pgoff;
+			put_write_entry(entry);
 		}
 	} while (1);
 

@@ -193,7 +193,10 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 				nova_persist_entry(entry);
 			}
 			allocated = ent_blks;
+			put_write_entry(entry);
 			goto next;
+		} else if (entry) {
+			put_write_entry(entry);
 		}
 
 		/* Allocate zeroed blocks to fill hole */
@@ -414,8 +417,8 @@ memcpy:
 
 		NOVA_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
 
-//		if (entry)
-//			put_write_entry(entry);
+		if (entry)
+			put_write_entry(entry);
 
 		if (left) {
 			nova_dbg("%s ERROR!: bytes %lu, left %lu\n",
