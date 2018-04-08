@@ -163,7 +163,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 
 	NOVA_START_TIMING(fallocate_t, fallocate_time);
 	inode_lock(inode);
-	sih_lock(sih);
+//	sih_lock(sih);
 
 	pi = nova_get_inode(sb, inode);
 	if (!pi) {
@@ -233,7 +233,7 @@ next:
 	}
 
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&item_head, total_blocks, 1);
+					&item_head, total_blocks, 1, 1);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
@@ -255,7 +255,7 @@ out:
 	if (ret < 0)
 		nova_cleanup_incomplete_write(sb, sih, &item_head, 1);
 
-	sih_unlock(sih);
+//	sih_unlock(sih);
 	inode_unlock(inode);
 	NOVA_END_TIMING(fallocate_t, fallocate_time);
 	return ret;
@@ -458,11 +458,11 @@ static ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 	timing_t dax_read_time;
 
 	NOVA_START_TIMING(dax_read_t, dax_read_time);
-	inode_lock_shared(inode);
-	sih_lock_shared(sih);
+//	inode_lock_shared(inode);
+//	sih_lock_shared(sih);
 	res = do_dax_mapping_read(filp, buf, len, ppos);
-	sih_unlock_shared(sih);
-	inode_unlock_shared(inode);
+//	sih_unlock_shared(sih);
+//	inode_unlock_shared(inode);
 	NOVA_END_TIMING(dax_read_t, dax_read_time);
 	return res;
 }
@@ -502,7 +502,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	if (len == 0)
 		return 0;
 
-	sih_lock(sih);
+//	sih_lock(sih);
 	NOVA_START_TIMING(cow_write_t, cow_write_time);
 	INIT_LIST_HEAD(&item_head);
 
@@ -615,7 +615,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	}
 
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&item_head, total_blocks, 1);
+					&item_head, total_blocks, 1, 1);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
@@ -637,7 +637,7 @@ out:
 
 	NOVA_END_TIMING(cow_write_t, cow_write_time);
 	NOVA_STATS_ADD(cow_write_bytes, written);
-	sih_unlock(sih);
+//	sih_unlock(sih);
 
 	return ret;
 }

@@ -171,7 +171,7 @@ static int nova_reassign_file_tree(struct super_block *sb,
 
 int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct list_head *head, unsigned long new_blocks,
-	int free)
+	int free, int need_lock)
 {
 	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_file_write_item *entry_item, *temp;
@@ -183,6 +183,9 @@ int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 	if (list_empty(head))
 		return 0;
 
+	if (need_lock)
+		sih_lock(sih);
+
 	update.tail = 0;
 
 	list_for_each_entry(entry_item, head, list) {
@@ -190,7 +193,8 @@ int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 					entry_item, &update);
 		if (ret) {
 			nova_dbg("%s: append inode entry failed\n", __func__);
-			return -ENOSPC;
+			ret = -ENOSPC;
+			goto out;
 		}
 
 		if (begin_tail == 0)
@@ -201,7 +205,7 @@ int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 	ret = nova_reassign_file_tree(sb, sih, begin_tail, update.tail);
 	if (ret < 0) {
 		/* FIXME: Need to rebuild the tree */
-		return ret;
+		goto out;
 	}
 
 	data_bits = blk_type_to_shift[sih->i_blk_type];
@@ -218,7 +222,9 @@ int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 		list_for_each_entry_safe(entry_item, temp, head, list)
 			nova_free_file_write_item(entry_item);
 	}
-
+out:
+	if (need_lock)
+		sih_unlock(sih);
 	return ret;
 }
 
@@ -383,10 +389,12 @@ static int nova_inplace_memcpy(struct super_block *sb, struct inode *inode,
  * Due to concurrent DAX fault, we may have overlapped entries in the list.
  * We copy the data to the existing data pages and update the entry.
  * Must be called with sih write lock held.
+ *
+ * Return minus on failure, 0 on success, 1 on overlapped entry found.
  */
 static int nova_commit_inplace_writes_to_log(struct super_block *sb,
 	struct nova_inode *pi, struct inode *inode,
-	struct list_head *head, unsigned long new_blocks,
+	struct list_head *head, unsigned long new_blocks, int memcpy,
 	loff_t pos, size_t len)
 {
 	struct nova_inode_info_header *sih = NOVA_IH(inode);
@@ -399,6 +407,7 @@ static int nova_commit_inplace_writes_to_log(struct super_block *sb,
 	unsigned long blocknr;
 	u64 epoch_id;
 	int inplace;
+	int overlapped = 0;
 	int ret = 0;
 
 	if (list_empty(head))
@@ -430,8 +439,10 @@ again:
 		/* Overlap with head. Memcpy */
 		if (entry) {
 			new_blocks -= ent_blks;
-			nova_inplace_memcpy(sb, inode, curr, entry, ent_blks,
-						pos, len);
+			overlapped = 1;
+			if (memcpy)
+				nova_inplace_memcpy(sb, inode, curr, entry,
+							ent_blks, pos, len);
 			put_write_entry(entry);
 			if (ent_blks == num_blocks) {
 				/* Full copy */
@@ -470,7 +481,7 @@ again:
 	}
 
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&new_head, new_blocks, 1);
+					&new_head, new_blocks, 1, 0);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
@@ -481,6 +492,10 @@ out:
 		nova_cleanup_incomplete_write(sb, sih, &new_head, 1);
 
 	sih_unlock(sih);
+
+	if (ret == 0 && overlapped)
+		ret = 1;
+
 	return ret;
 }
 
@@ -573,11 +588,11 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 		offset = pos & (nova_inode_blk_size(sih) - 1);
 		start_blk = pos >> sb->s_blocksize_bits;
 
-		sih_lock_shared(sih);
+//		sih_lock_shared(sih);
 		ent_blks = nova_check_existing_entry(sb, inode, num_blocks,
 						start_blk, &entry,
 						1, epoch_id, &inplace);
-		sih_unlock_shared(sih);
+//		sih_unlock_shared(sih);
 
 		if (entry && inplace) {
 			/* We can do inplace write. Find contiguous blocks */
@@ -689,7 +704,7 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 	}
 
 	ret = nova_commit_inplace_writes_to_log(sb, pi, inode, &item_head,
-					new_blocks, original_pos, len);
+					new_blocks, 1, original_pos, len);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
@@ -779,7 +794,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	epoch_id = nova_get_epoch_id(sb);
 
 	check_next = 0;
-	sih_lock_shared(sih);
+//	sih_lock_shared(sih);
 
 again:
 	num_blocks = nova_check_existing_entry(sb, inode, max_blocks,
@@ -803,8 +818,8 @@ again:
 	}
 
 	if (locked == 0) {
-		sih_unlock_shared(sih);
-		sih_lock(sih);
+//		sih_unlock_shared(sih);
+//		sih_lock(sih);
 		locked = 1;
 		/* Check again incase someone has done it for us */
 		check_next = 1;
@@ -837,11 +852,14 @@ again:
 
 	nvmm = blocknr;
 
-	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&item_head, num_blocks, 0);
+	ret = nova_commit_inplace_writes_to_log(sb, pi, inode, &item_head,
+					num_blocks, 0, 0, 0);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
+	} else if (ret > 0) {
+		/* Found blocks committed by others. Retry */
+		goto again;
 	}
 
 	NOVA_STATS_ADD(dax_new_blocks, 1);
@@ -860,10 +878,10 @@ out:
 //		bh->b_size = sb->s_blocksize * num_blocks;
 
 out1:
-	if (locked)
-		sih_unlock(sih);
-	else
-		sih_unlock_shared(sih);
+//	if (locked)
+//		sih_unlock(sih);
+//	else
+//		sih_unlock_shared(sih);
 
 	NOVA_END_TIMING(dax_get_block_t, get_block_time);
 	return num_blocks;
