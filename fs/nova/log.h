@@ -90,6 +90,7 @@ struct nova_file_write_entry {
 struct nova_file_write_item {
 	struct nova_file_write_entry	entry;
 	struct list_head		list;
+	int				need_free; /* On heap or stack? */
 };
 
 /*

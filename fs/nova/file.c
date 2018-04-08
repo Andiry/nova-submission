@@ -224,6 +224,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 					start_blk, allocated, blocknr,
 					time, new_size);
 
+		entry_item->need_free = 1;
 		list_add_tail(&entry_item->list, &item_head);
 
 		total_blocks += allocated;
@@ -233,7 +234,7 @@ next:
 	}
 
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&item_head, total_blocks, 1, 1);
+					&item_head, total_blocks, 1);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
@@ -253,7 +254,7 @@ next:
 
 out:
 	if (ret < 0)
-		nova_cleanup_incomplete_write(sb, sih, &item_head, 1);
+		nova_cleanup_incomplete_write(sb, sih, &item_head);
 
 //	sih_unlock(sih);
 	inode_unlock(inode);
@@ -593,6 +594,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 					start_blk, allocated, blocknr, time,
 					file_size);
 
+		entry_item->need_free = 1;
 		list_add_tail(&entry_item->list, &item_head);
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);
@@ -615,7 +617,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	}
 
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&item_head, total_blocks, 1, 1);
+					&item_head, total_blocks, 1);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
@@ -633,7 +635,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 
 out:
 	if (ret < 0)
-		nova_cleanup_incomplete_write(sb, sih, &item_head, 1);
+		nova_cleanup_incomplete_write(sb, sih, &item_head);
 
 	NOVA_END_TIMING(cow_write_t, cow_write_time);
 	NOVA_STATS_ADD(cow_write_bytes, written);

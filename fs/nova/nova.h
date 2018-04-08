@@ -477,9 +477,9 @@ int nova_handle_head_tail_blocks(struct super_block *sb,
 	struct inode *inode, loff_t pos, size_t count, void *kmem);
 int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct list_head *head, unsigned long new_blocks,
-	int free, int need_lock);
+	int need_lock);
 int nova_cleanup_incomplete_write(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct list_head *head, int free);
+	struct nova_inode_info_header *sih, struct list_head *head);
 void nova_init_file_write_item(struct super_block *sb,
 	struct nova_inode_info_header *sih, struct nova_file_write_item *item,
 	u64 epoch_id, u64 pgoff, int num_pages, u64 blocknr, u32 time,

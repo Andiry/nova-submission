@@ -171,7 +171,7 @@ static int nova_reassign_file_tree(struct super_block *sb,
 
 int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 	struct inode *inode, struct list_head *head, unsigned long new_blocks,
-	int free, int need_lock)
+	int need_lock)
 {
 	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_file_write_item *entry_item, *temp;
@@ -218,8 +218,8 @@ int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 
 	sih->trans_id++;
 
-	if (free) {
-		list_for_each_entry_safe(entry_item, temp, head, list)
+	list_for_each_entry_safe(entry_item, temp, head, list) {
+		if (entry_item->need_free)
 			nova_free_file_write_item(entry_item);
 	}
 out:
@@ -229,7 +229,7 @@ out:
 }
 
 int nova_cleanup_incomplete_write(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct list_head *head, int free)
+	struct nova_inode_info_header *sih, struct list_head *head)
 {
 	struct nova_file_write_item *entry_item, *temp;
 	struct nova_file_write_entry *entry;
@@ -240,7 +240,7 @@ int nova_cleanup_incomplete_write(struct super_block *sb,
 		blocknr = nova_get_blocknr(sb, entry->block, sih->i_blk_type);
 		nova_free_data_blocks(sb, sih, blocknr, entry->num_pages);
 
-		if (free)
+		if (entry_item->need_free)
 			nova_free_file_write_item(entry_item);
 	}
 
@@ -271,6 +271,28 @@ void nova_init_file_write_item(struct super_block *sb,
 	entry->size = file_size;
 }
 
+static unsigned long get_entry_info(struct nova_file_write_entry *entry,
+	unsigned long start_blk, unsigned long num_blocks, int *inplace,
+	u64 epoch_id)
+{
+	unsigned long ent_blks = 0;
+
+	/* We can do inplace write. Find contiguous blocks */
+	if (entry->reassigned == 0)
+		ent_blks = entry->num_pages -
+				(start_blk - entry->pgoff);
+	else
+		ent_blks = 1;
+
+	if (ent_blks > num_blocks)
+		ent_blks = num_blocks;
+
+	if (entry->epoch_id == epoch_id)
+		*inplace = 1;
+
+	return ent_blks;
+}
+
 /*
  * Check if there is an existing entry or hole for target page offset.
  * Used for inplace write, DAX-mmap and fallocate.
@@ -294,37 +316,26 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 	entry = nova_get_write_entry(sb, sih, start_blk);
 
 	if (entry) {
+		/* Inplace update entry */
 		*ret_entry = entry;
-
-		/* We can do inplace write. Find contiguous blocks */
-		if (entry->reassigned == 0)
-			ent_blks = entry->num_pages -
-					(start_blk - entry->pgoff);
-		else
-			ent_blks = 1;
-
-		if (ent_blks > num_blocks)
-			ent_blks = num_blocks;
-
-		if (entry->epoch_id == epoch_id)
-			*inplace = 1;
-
+		ent_blks = get_entry_info(entry, start_blk, num_blocks,
+						inplace, epoch_id);
 	} else if (check_next) {
 		/* Possible Hole */
 		entry = nova_find_next_entry(sb, sih, start_blk);
 		if (entry) {
 			next_pgoff = entry->pgoff;
-			if (next_pgoff <= start_blk) {
-				nova_err(sb, "iblock %lu, entry pgoff %lu, num pages %lu\n",
-				       start_blk, next_pgoff, entry->num_pages);
-				nova_print_inode_log(sb, inode);
-				dump_stack();
-				ent_blks = num_blocks;
-				goto out;
+			if (next_pgoff > start_blk) {
+				/* Hole */
+				ent_blks = next_pgoff - start_blk;
+				if (ent_blks > num_blocks)
+					ent_blks = num_blocks;
+			} else {
+				/* Someone has done it for us */
+				*ret_entry = entry;
+				ent_blks = get_entry_info(entry, start_blk,
+						num_blocks, inplace, epoch_id);
 			}
-			ent_blks = next_pgoff - start_blk;
-			if (ent_blks > num_blocks)
-				ent_blks = num_blocks;
 		} else {
 			/* File grow */
 			ent_blks = num_blocks;
@@ -336,7 +347,6 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 		dump_stack();
 	}
 
-out:
 	NOVA_END_TIMING(check_entry_t, check_time);
 	return ent_blks;
 }
@@ -448,7 +458,8 @@ again:
 				/* Full copy */
 				nova_free_data_blocks(sb, sih, blocknr,
 						ent_blks);
-				nova_free_file_write_item(entry_item);
+				if (entry_item->need_free)
+					nova_free_file_write_item(entry_item);
 				continue;
 			} else {
 				/* Partial copy */
@@ -472,6 +483,7 @@ again:
 				epoch_id, start_blk, ent_blks,
 				blocknr, entry->mtime, entry->size);
 
+		new_item->need_free = 1;
 		list_add_tail(&new_item->list, &new_head);
 
 		curr->num_pages -= ent_blks;
@@ -481,7 +493,7 @@ again:
 	}
 
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&new_head, new_blocks, 1, 0);
+					&new_head, new_blocks, 0);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
@@ -489,7 +501,7 @@ again:
 
 out:
 	if (ret < 0)
-		nova_cleanup_incomplete_write(sb, sih, &new_head, 1);
+		nova_cleanup_incomplete_write(sb, sih, &new_head);
 
 	sih_unlock(sih);
 
@@ -667,6 +679,7 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 						epoch_id, start_blk, allocated,
 						blocknr, time, file_size);
 
+			entry_item->need_free = 1;
 			list_add_tail(&entry_item->list, &item_head);
 		} else {
 			/* Update existing entry */
@@ -722,7 +735,7 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 
 out:
 	if (ret < 0)
-		nova_cleanup_incomplete_write(sb, sih, &item_head, 1);
+		nova_cleanup_incomplete_write(sb, sih, &item_head);
 
 	NOVA_END_TIMING(inplace_write_t, inplace_write_time);
 	NOVA_STATS_ADD(inplace_write_bytes, written);
@@ -848,6 +861,7 @@ again:
 					epoch_id, iblock, num_blocks,
 					blocknr, time, inode->i_size);
 
+	entry_item.need_free = 0;
 	list_add_tail(&entry_item.list, &item_head);
 
 	nvmm = blocknr;
@@ -868,7 +882,7 @@ again:
 //	set_buffer_new(bh);
 out:
 	if (ret < 0) {
-		nova_cleanup_incomplete_write(sb, sih, &item_head, 0);
+		nova_cleanup_incomplete_write(sb, sih, &item_head);
 		num_blocks = ret;
 		goto out1;
 	}
