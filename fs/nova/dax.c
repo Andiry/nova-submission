@@ -756,11 +756,11 @@ ssize_t nova_inplace_file_write(struct file *filp,
 		return 0;
 
 	sb_start_write(inode->i_sb);
-	inode_lock(inode);
+//	inode_lock(inode);
 
 	ret = do_nova_inplace_file_write(filp, buf, len, ppos);
 
-	inode_unlock(inode);
+//	inode_unlock(inode);
 	sb_end_write(inode->i_sb);
 
 	return ret;

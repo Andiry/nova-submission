@@ -162,7 +162,7 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 			__func__, inode->i_ino,	offset, len, mode);
 
 	NOVA_START_TIMING(fallocate_t, fallocate_time);
-	inode_lock(inode);
+//	inode_lock(inode);
 //	sih_lock(sih);
 
 	pi = nova_get_inode(sb, inode);
@@ -257,7 +257,7 @@ out:
 		nova_cleanup_incomplete_write(sb, sih, &item_head);
 
 //	sih_unlock(sih);
-	inode_unlock(inode);
+//	inode_unlock(inode);
 	NOVA_END_TIMING(fallocate_t, fallocate_time);
 	return ret;
 }
@@ -273,9 +273,9 @@ static ssize_t nova_dax_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 	NOVA_START_TIMING(read_iter_t, read_iter_time);
 
-	inode_lock_shared(inode);
+//	inode_lock_shared(inode);
 	ret = dax_iomap_rw(iocb, to, &nova_iomap_ops);
-	inode_unlock_shared(inode);
+//	inode_unlock_shared(inode);
 
 	file_accessed(iocb->ki_filp);
 	NOVA_END_TIMING(read_iter_t, read_iter_time);
@@ -293,7 +293,7 @@ static ssize_t nova_dax_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	timing_t write_iter_time;
 
 	NOVA_START_TIMING(write_iter_t, write_iter_time);
-	inode_lock(inode);
+//	inode_lock(inode);
 	ret = generic_write_checks(iocb, from);
 	if (ret <= 0)
 		goto out_unlock;
@@ -317,7 +317,7 @@ static ssize_t nova_dax_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	}
 
 out_unlock:
-	inode_unlock(inode);
+//	inode_unlock(inode);
 	if (ret > 0)
 		ret = generic_write_sync(iocb, ret);
 	NOVA_END_TIMING(write_iter_t, write_iter_time);
@@ -658,14 +658,14 @@ ssize_t nova_cow_file_write(struct file *filp,
 		return 0;
 
 	sb_start_write(inode->i_sb);
-	inode_lock(inode);
+//	inode_lock(inode);
 
 	if (mapping_mapped(mapping))
 		ret = do_nova_inplace_file_write(filp, buf, len, ppos);
 	else
 		ret = do_nova_cow_file_write(filp, buf, len, ppos);
 
-	inode_unlock(inode);
+//	inode_unlock(inode);
 	sb_end_write(inode->i_sb);
 
 	return ret;
