@@ -354,8 +354,8 @@ static inline unsigned long BKDRHash(const char *str, int length)
 #include "balloc.h"
 
 static inline struct nova_file_write_entry *
-nova_get_write_entry(struct super_block *sb,
-	struct nova_inode_info_header *sih, unsigned long blocknr)
+nova_get_or_lock_write_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr, int lock)
 {
 	struct nova_file_write_entry *entry;
 	void **entryp;
@@ -378,8 +378,13 @@ repeat:
 			goto out;
 		}
 
-		if (!get_write_entry(entry))
-			goto repeat;
+		if (lock) {
+			if (!lock_write_entry(entry))
+				goto repeat;
+		} else {
+			if (!get_write_entry(entry))
+				goto repeat;
+		}
 
 		if (unlikely(entry != *entryp)) {
 			put_write_entry(entry);
@@ -392,6 +397,19 @@ out:
 	return entry;
 }
 
+static inline struct nova_file_write_entry *
+nova_get_write_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr)
+{
+	return nova_get_or_lock_write_entry(sb, sih, blocknr, 0);
+}
+
+static inline struct nova_file_write_entry *
+nova_lock_write_entry(struct super_block *sb,
+	struct nova_inode_info_header *sih, unsigned long blocknr)
+{
+	return nova_get_or_lock_write_entry(sb, sih, blocknr, 1);
+}
 
 /*
  * Find data at a file offset (pgoff) in the data pointed to by a write log
