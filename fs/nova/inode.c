@@ -709,9 +709,10 @@ int nova_delete_file_tree(struct super_block *sb,
 
 	/* Handle EOF blocks */
 	do {
-		entry = radix_tree_lookup(&sih->tree, pgoff);
+		entry = nova_lock_write_entry(sb, sih, pgoff);
 		if (entry) {
 			ret = radix_tree_delete(&sih->tree, pgoff);
+			unlock_write_entry(entry);
 			WARN_ON(!ret || ret != entry);
 			if (entry != old_entry) {
 				if (old_entry && delete_nvmm) {

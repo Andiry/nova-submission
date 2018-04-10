@@ -653,10 +653,22 @@ int nova_assign_write_entry(struct super_block *sb,
 	NOVA_START_TIMING(assign_t, assign_time);
 	for (i = 0; i < num; i++) {
 		curr_pgoff = start_pgoff + i;
-
+repeat:
 		pentry = radix_tree_lookup_slot(&sih->tree, curr_pgoff);
 		if (pentry) {
 			old_entry = radix_tree_deref_slot(pentry);
+			if (radix_tree_exception(old_entry)) {
+				if (radix_tree_deref_retry(old_entry))
+					goto repeat;
+				radix_tree_replace_slot(&sih->tree, pentry,
+						entry);
+				continue;
+			}
+
+			lock_write_entry(old_entry);
+			radix_tree_replace_slot(&sih->tree, pentry, entry);
+			unlock_write_entry(old_entry);
+
 			if (old_entry != start_old_entry) {
 				if (start_old_entry && free)
 					nova_free_old_entry(sb, sih,
@@ -673,8 +685,6 @@ int nova_assign_write_entry(struct super_block *sb,
 			} else {
 				num_free++;
 			}
-
-			radix_tree_replace_slot(&sih->tree, pentry, entry);
 		} else {
 			ret = radix_tree_insert(&sih->tree, curr_pgoff, entry);
 			if (ret) {
