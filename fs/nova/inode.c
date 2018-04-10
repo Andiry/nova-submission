@@ -1121,7 +1121,6 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize,
 	nova_dbgv("%s: inode %lu, old size %llu, new size %llu\n",
 		__func__, inode->i_ino, oldsize, newsize);
 
-	sih_lock(sih);
 	if (newsize != oldsize) {
 		nova_clear_last_page_tail(sb, inode, newsize);
 		i_size_write(inode, newsize);
@@ -1139,7 +1138,6 @@ static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize,
 
 	truncate_pagecache(inode, newsize);
 	nova_truncate_file_blocks(inode, newsize, oldsize, epoch_id);
-	sih_unlock(sih);
 	NOVA_END_TIMING(setsize_t, setsize_time);
 }
 
@@ -1177,6 +1175,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	u64 epoch_id;
 	timing_t setattr_time;
 
+	sih_lock(sih);
 	NOVA_START_TIMING(setattr_t, setattr_time);
 	if (!pi) {
 		ret = -EACCES;
@@ -1217,6 +1216,7 @@ int nova_notify_change(struct dentry *dentry, struct iattr *attr)
 	sih->trans_id++;
 out:
 	NOVA_END_TIMING(setattr_t, setattr_time);
+	sih_unlock(sih);
 	return ret;
 }
 

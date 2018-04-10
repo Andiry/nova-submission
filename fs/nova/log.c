@@ -353,8 +353,8 @@ static int nova_append_log_entry(struct super_block *sb,
 	if (curr_p == 0)
 		return -ENOSPC;
 
-	nova_dbg_verbose("%s: inode %lu attr change entry @ 0x%llx\n",
-				__func__, sih->ino, curr_p);
+	nova_dbgv("%s: inode %lu, type %d entry @ 0x%llx\n",
+				__func__, sih->ino, type, curr_p);
 
 	entry = nova_get_block(sb, curr_p);
 	/* inode is already updated with attr */
