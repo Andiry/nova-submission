@@ -533,7 +533,7 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct super_block *sb = inode->i_sb;
 	struct nova_inode *pi;
-	struct nova_file_write_entry *entry;
+	struct nova_file_write_entry *entry, *entry1;
 	struct nova_file_write_item *entry_item;
 	struct list_head item_head;
 	struct nova_inode_update update;
@@ -611,6 +611,7 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 			blocknr = get_nvmm(sb, sih, entry, start_blk);
 			blk_off = blocknr << PAGE_SHIFT;
 			allocated = ent_blks;
+			put_write_entry(entry);
 		} else {
 			if (entry)
 				put_write_entry(entry);
@@ -692,9 +693,11 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 			entry_info.file_size = file_size;
 			entry_info.inplace = 1;
 
-			nova_inplace_update_write_entry(sb, inode, entry,
+			entry1 = nova_lock_write_entry(sb, sih, start_blk);
+			if (entry1 == entry)
+				nova_inplace_update_write_entry(sb, inode, entry1,
 							&entry_info);
-			put_write_entry(entry);
+			unlock_write_entry(entry1);
 		}
 
 		nova_dbgv("Write: %p, %lu\n", kmem, copied);
