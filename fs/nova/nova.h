@@ -423,28 +423,6 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 		- entry->pgoff;
 }
 
-static inline u64 nova_find_nvmm_block(struct super_block *sb,
-	struct nova_inode_info_header *sih, struct nova_file_write_entry *entry,
-	unsigned long blocknr)
-{
-	unsigned long nvmm;
-	struct nova_file_write_entry *entryc, entry_copy;
-
-	if (!entry) {
-		entry = nova_get_write_entry(sb, sih, blocknr);
-		if (!entry)
-			return 0;
-	}
-
-	entryc = &entry_copy;
-	if (memcpy_mcsafe(entryc, entry,
-			sizeof(struct nova_file_write_entry)) < 0)
-		return 0;
-
-	nvmm = get_nvmm(sb, sih, entryc, blocknr);
-	return nvmm << PAGE_SHIFT;
-}
-
 static inline unsigned long
 nova_get_numblocks(unsigned short btype)
 {

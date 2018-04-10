@@ -1078,9 +1078,10 @@ static void nova_clear_last_page_tail(struct super_block *sb,
 {
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	struct nova_inode_info_header *sih = NOVA_IH(inode);
+	struct nova_file_write_entry *entry;
 	unsigned long offset = newsize & (sb->s_blocksize - 1);
 	unsigned long pgoff, length;
-	u64 nvmm;
+	unsigned long nvmm;
 	char *nvmm_addr;
 
 	if (offset == 0 || newsize > inode->i_size)
@@ -1089,12 +1090,14 @@ static void nova_clear_last_page_tail(struct super_block *sb,
 	length = sb->s_blocksize - offset;
 	pgoff = newsize >> sb->s_blocksize_bits;
 
-	nvmm = nova_find_nvmm_block(sb, sih, NULL, pgoff);
-	if (nvmm == 0)
+	entry = nova_get_write_entry(sb, sih, pgoff);
+	if (!entry)
 		return;
 
-	nvmm_addr = (char *)nova_get_block(sb, nvmm);
+	nvmm = get_nvmm(sb, sih, entry, pgoff);
+	nvmm_addr = (char *)nova_get_block(sb, nvmm << PAGE_SHIFT);
 	memcpy_to_pmem_nocache(nvmm_addr + offset, sbi->zeroed_page, length);
+	put_write_entry(entry);
 }
 
 static void nova_setsize(struct inode *inode, loff_t oldsize, loff_t newsize,
