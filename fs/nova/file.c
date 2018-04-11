@@ -264,7 +264,7 @@ out:
 
 static ssize_t nova_dax_read_iter(struct kiocb *iocb, struct iov_iter *to)
 {
-	struct inode *inode = iocb->ki_filp->f_mapping->host;
+//	struct inode *inode = iocb->ki_filp->f_mapping->host;
 	ssize_t ret;
 	timing_t read_iter_time;
 
@@ -453,8 +453,8 @@ out:
 static ssize_t nova_dax_file_read(struct file *filp, char __user *buf,
 			    size_t len, loff_t *ppos)
 {
-	struct inode *inode = filp->f_mapping->host;
-	struct nova_inode_info_header *sih = NOVA_IH(inode);
+//	struct inode *inode = filp->f_mapping->host;
+//	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	ssize_t res;
 	timing_t dax_read_time;
 

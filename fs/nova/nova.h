@@ -429,12 +429,14 @@ static inline unsigned long get_nvmm(struct super_block *sb,
 		u64 curr;
 
 		curr = nova_get_addr_off(sbi, entry);
-		nova_dbg("Entry ERROR: inode %lu, curr 0x%llx, pgoff %lu, entry pgoff %llu, num %u\n",
-			sih->ino,
-			curr, pgoff, entry->pgoff, entry->num_pages);
+		nova_dbg("Entry ERROR: inode %lu, curr 0x%llx, pgoff %lu, "
+			"entry pgoff %llu, num %u, counter %d\n",
+			sih->ino, curr, pgoff, entry->pgoff,
+			entry->num_pages, entry->counter);
 		nova_print_nova_log_pages(sb, sih);
-		nova_print_nova_log(sb, sih);
+		nova_print_curr_log_page(sb, curr);
 		NOVA_ASSERT(0);
+		dump_stack();
 	}
 
 	return (unsigned long) (entry->block >> PAGE_SHIFT) + pgoff
