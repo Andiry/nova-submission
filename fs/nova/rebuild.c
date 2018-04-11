@@ -261,7 +261,12 @@ static int nova_rebuild_file_inode_tree(struct super_block *sb,
 		default:
 			nova_err(sb, "unknown type %d, 0x%llx\n", type, curr_p);
 			NOVA_ASSERT(0);
-			curr_p += sizeof(struct nova_file_write_entry);
+			nova_dbg("Inode %lu, log head 0x%llx, tail 0x%llx\n",
+					sih->ino, sih->log_head, sih->log_tail);
+			nova_print_curr_log_page(sb, curr_p);
+			/* Discard unknown entries */
+			sih->log_tail = curr_p;
+			nova_update_tail(pi, curr_p);
 			break;
 		}
 
@@ -439,6 +444,12 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 			nova_dbg("%s: unknown type %d, 0x%llx\n",
 					__func__, type, curr_p);
 			NOVA_ASSERT(0);
+			nova_dbg("Inode %lu, log head 0x%llx, tail 0x%llx\n",
+					sih->ino, sih->log_head, sih->log_tail);
+			nova_print_curr_log_page(sb, curr_p);
+			/* Discard unknown entries */
+			sih->log_tail = curr_p;
+			nova_update_tail(pi, curr_p);
 			break;
 		}
 	}
