@@ -671,7 +671,7 @@ wait_queue_head_t finish_wq;
 int *finished;
 
 static int nova_traverse_inode_log(struct super_block *sb,
-	struct nova_inode *pi, struct scan_bitmap *bm, u64 head)
+	struct scan_bitmap *bm, u64 head)
 {
 	u64 curr_p;
 	u64 next;
@@ -696,9 +696,10 @@ static int nova_traverse_inode_log(struct super_block *sb,
 }
 
 static void nova_traverse_dir_inode_log(struct super_block *sb,
-	struct nova_inode *pi, struct scan_bitmap *bm)
+	struct nova_inode *pi, struct nova_inode_info_header *sih,
+	struct scan_bitmap *bm)
 {
-	nova_traverse_inode_log(sb, pi, bm, pi->log_head);
+	nova_traverse_inode_log(sb, bm, sih->log_head);
 }
 
 static int nova_set_ring_array(struct super_block *sb,
@@ -856,14 +857,14 @@ static int nova_traverse_file_inode_log(struct super_block *sb,
 	u64 next;
 	u8 type;
 
-	btype = pi->i_blk_type;
+	btype = sih->i_blk_type;
 	data_bits = blk_type_to_shift[btype];
 
 again:
-	curr_p = pi->log_head;
+	curr_p = sih->log_head;
 	nova_dbg_verbose("Log head 0x%llx, tail 0x%llx\n",
-				curr_p, pi->log_tail);
-	if (curr_p == 0 && pi->log_tail == 0)
+				curr_p, sih->log_tail);
+	if (curr_p == 0 && sih->log_tail == 0)
 		return 0;
 
 	if (base == 0) {
@@ -871,7 +872,7 @@ again:
 		set_bm(curr_p >> PAGE_SHIFT, bm, BM_4K);
 	}
 
-	while (curr_p != pi->log_tail) {
+	while (curr_p != sih->log_tail) {
 		if (goto_next_page(sb, curr_p)) {
 			curr_p = next_log_page(sb, curr_p);
 			if (base == 0) {
@@ -904,8 +905,14 @@ again:
 			nova_dbg("%s: unknown type %d, 0x%llx\n",
 						__func__, type, curr_p);
 			NOVA_ASSERT(0);
+			nova_dbg("Inode %lu, log head 0x%llx, tail 0x%llx\n",
+					sih->ino, sih->log_head, sih->log_tail);
+			nova_print_curr_log_page(sb, curr_p);
+			/* Discard unknown entries */
+			sih->log_tail = curr_p;
+			nova_update_tail(pi, curr_p);
+			break;
 		}
-
 	}
 
 	if (base == 0) {
@@ -934,6 +941,7 @@ static int nova_recover_inode_pages(struct super_block *sb,
 	struct nova_inode *pi, struct scan_bitmap *bm)
 {
 	unsigned long nova_ino;
+	int ret;
 
 	if (pi->deleted == 1)
 		return 0;
@@ -943,13 +951,16 @@ static int nova_recover_inode_pages(struct super_block *sb,
 
 	sih->i_mode = __le16_to_cpu(pi->i_mode);
 	sih->ino = nova_ino;
+	ret = nova_get_head_tail(sb, pi, sih);
+	if (ret)
+		return ret;
 
 	nova_dbgv("%s: inode %lu, head 0x%llx, tail 0x%llx\n",
 			__func__, nova_ino, pi->log_head, pi->log_tail);
 
 	switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
 	case S_IFDIR:
-		nova_traverse_dir_inode_log(sb, pi, bm);
+		nova_traverse_dir_inode_log(sb, pi, sih, bm);
 		break;
 	case S_IFLNK:
 		/* Treat symlink files as normal files */
