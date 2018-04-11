@@ -88,7 +88,6 @@ long nova_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			nova_update_inode(sb, inode, pi, &update);
 			nova_invalidate_link_change_entry(sb, old_linkc);
 		}
-		sih->trans_id++;
 flags_out_unlock:
 		sih_unlock(sih);
 		inode_unlock(inode);
@@ -126,7 +125,6 @@ flags_out:
 			nova_update_inode(sb, inode, pi, &update);
 			nova_invalidate_link_change_entry(sb, old_linkc);
 		}
-		sih->trans_id++;
 		sih_unlock(sih);
 		inode_unlock(inode);
 setversion_out:
