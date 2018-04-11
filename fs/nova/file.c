@@ -483,15 +483,15 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	struct list_head item_head;
 	struct nova_inode_update update;
 	ssize_t	    written = 0;
-	loff_t pos;
+	loff_t pos, pos_head, pos_tail;
 	size_t count, offset, copied;
 	unsigned long start_blk, num_blocks;
 	unsigned long total_blocks;
 	unsigned long blocknr = 0;
 	int allocated = 0;
-	void *kmem;
+	void *kmem, *kmem_head = NULL, *kmem_tail = NULL;
 	u64 file_size;
-	size_t bytes;
+	size_t bytes, bytes_head, bytes_tail;
 	long status = 0;
 	timing_t cow_write_time, memcpy_time;
 	unsigned long step = 0;
@@ -566,12 +566,16 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 		kmem = nova_get_block(inode->i_sb,
 			     nova_get_block_off(sb, blocknr, sih->i_blk_type));
 
-		if (offset || ((offset + bytes) & (PAGE_SIZE - 1)) != 0)  {
-			ret = nova_handle_head_tail_blocks(sb, inode, pos,
-							   bytes, kmem);
-			if (ret)
-				goto out;
+		if (offset) {
+			pos_head = pos;
+			bytes_head = bytes;
+			kmem_head = kmem;
+		} else if (((offset + bytes) & (PAGE_SIZE - 1)) != 0)  {
+			pos_tail = pos;
+			bytes_tail = bytes;
+			kmem_tail = kmem;
 		}
+
 		/* Now copy from user buf */
 		//		nova_dbg("Write: %p\n", kmem);
 		NOVA_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
@@ -616,8 +620,32 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 			break;
 	}
 
+	sih_lock(sih);
+
+	/* Handle head/tail blocks inside the lock */
+	if (kmem_head) {
+		ret = nova_handle_head_tail_blocks(sb, inode, pos_head,
+						   bytes_head, kmem_head);
+		if (ret) {
+			sih_unlock(sih);
+			goto out;
+		}
+	}
+
+	if (kmem_tail) {
+		ret = nova_handle_head_tail_blocks(sb, inode, pos_tail,
+						   bytes_tail, kmem_tail);
+		if (ret) {
+			sih_unlock(sih);
+			goto out;
+		}
+	}
+
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&item_head, total_blocks, 1);
+					&item_head, total_blocks, 0);
+
+	sih_unlock(sih);
+
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
