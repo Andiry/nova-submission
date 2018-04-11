@@ -169,9 +169,11 @@ static int nova_reassign_file_tree(struct super_block *sb,
 	return 0;
 }
 
+/*
+ * Commit entries to log and update radix tree. Caller needs to hold sih lock.
+ */
 int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
-	struct inode *inode, struct list_head *head, unsigned long new_blocks,
-	int need_lock)
+	struct inode *inode, struct list_head *head, unsigned long new_blocks)
 {
 	struct nova_inode_info_header *sih = NOVA_IH(inode);
 	struct nova_file_write_item *entry_item, *temp;
@@ -183,9 +185,6 @@ int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 	if (list_empty(head))
 		return 0;
 
-	if (need_lock)
-		sih_lock(sih);
-
 	update.tail = 0;
 
 	list_for_each_entry(entry_item, head, list) {
@@ -193,8 +192,7 @@ int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 					entry_item, &update);
 		if (ret) {
 			nova_dbg("%s: append inode entry failed\n", __func__);
-			ret = -ENOSPC;
-			goto out;
+			return -ENOSPC;
 		}
 
 		if (begin_tail == 0)
@@ -205,7 +203,7 @@ int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 	ret = nova_reassign_file_tree(sb, sih, begin_tail, update.tail);
 	if (ret < 0) {
 		/* FIXME: Need to rebuild the tree */
-		goto out;
+		return ret;
 	}
 
 	data_bits = blk_type_to_shift[sih->i_blk_type];
@@ -222,9 +220,7 @@ int nova_commit_writes_to_log(struct super_block *sb, struct nova_inode *pi,
 		if (entry_item->need_free)
 			nova_free_file_write_item(entry_item);
 	}
-out:
-	if (need_lock)
-		sih_unlock(sih);
+
 	return ret;
 }
 
@@ -493,7 +489,7 @@ again:
 	}
 
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&new_head, new_blocks, 0);
+					&new_head, new_blocks);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;

@@ -234,7 +234,7 @@ next:
 	}
 
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&item_head, total_blocks, 0);
+					&item_head, total_blocks);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
@@ -642,7 +642,7 @@ static ssize_t do_nova_cow_file_write(struct file *filp,
 	}
 
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&item_head, total_blocks, 0);
+					&item_head, total_blocks);
 
 	sih_unlock(sih);
 
