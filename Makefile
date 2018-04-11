@@ -693,7 +693,7 @@ ifdef CONFIG_CC_STACKPROTECTOR_REGULAR
   stackp-name := REGULAR
 else
 ifdef CONFIG_CC_STACKPROTECTOR_STRONG
-  stackp-flag := -fstack-protector-strong
+  stackp-flag := -fstack-protector
   stackp-name := STRONG
 else
   # If either there is no stack protector for this architecture or
