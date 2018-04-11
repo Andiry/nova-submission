@@ -162,8 +162,8 @@ static long nova_fallocate(struct file *file, int mode, loff_t offset,
 			__func__, inode->i_ino,	offset, len, mode);
 
 	NOVA_START_TIMING(fallocate_t, fallocate_time);
-//	inode_lock(inode);
-//	sih_lock(sih);
+	inode_lock(inode);
+	sih_lock(sih);
 
 	pi = nova_get_inode(sb, inode);
 	if (!pi) {
@@ -234,7 +234,7 @@ next:
 	}
 
 	ret = nova_commit_writes_to_log(sb, pi, inode,
-					&item_head, total_blocks, 1);
+					&item_head, total_blocks, 0);
 	if (ret < 0) {
 		nova_err(sb, "commit to log failed\n");
 		goto out;
@@ -256,8 +256,8 @@ out:
 	if (ret < 0)
 		nova_cleanup_incomplete_write(sb, sih, &item_head);
 
-//	sih_unlock(sih);
-//	inode_unlock(inode);
+	sih_unlock(sih);
+	inode_unlock(inode);
 	NOVA_END_TIMING(fallocate_t, fallocate_time);
 	return ret;
 }
