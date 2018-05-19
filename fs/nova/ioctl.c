@@ -151,6 +151,10 @@ setversion_out:
 		nova_print_free_lists(sb);
 		return 0;
 	}
+	case NOVA_GET_NUMAID: {
+		/* FIXME: Hardcoded */
+		return put_user(0, (int __user *)arg);
+	}
 	default:
 		return -ENOTTY;
 	}
