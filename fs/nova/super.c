@@ -101,7 +101,7 @@ static int nova_get_nvmm_info(struct super_block *sb,
 	struct dax_device *dax_dev;
 	int ret;
 
-	ret = bdev_dax_supported(sb, PAGE_SIZE);
+	ret = bdev_dax_supported(sb->s_bdev, PAGE_SIZE);
 	nova_dbg_verbose("%s: dax_supported = %d; bdev->super=0x%p",
 			 __func__, ret, sb->s_bdev->bd_super);
 	if (ret) {
