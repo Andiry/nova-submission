@@ -357,7 +357,7 @@ static struct nova_inode *nova_init(struct super_block *sb,
 	struct nova_super_block *super;
 	struct nova_sb_info *sbi = NOVA_SB(sb);
 	u64 epoch_id;
-	timing_t init_time;
+	INIT_TIMING(init_time);
 
 	NOVA_START_TIMING(new_init_t, init_time);
 
@@ -509,7 +509,7 @@ static int nova_fill_super(struct super_block *sb, void *data, int silent)
 	u32 random = 0;
 	int retval = -EINVAL;
 	int i;
-	timing_t mount_time;
+	INIT_TIMING(mount_time);
 
 	NOVA_START_TIMING(mount_t, mount_time);
 
@@ -1004,7 +1004,7 @@ static const struct export_operations nova_export_ops = {
 static int __init init_nova_fs(void)
 {
 	int rc = 0;
-	timing_t init_time;
+	INIT_TIMING(init_time);
 
 	NOVA_START_TIMING(init_t, init_time);
 

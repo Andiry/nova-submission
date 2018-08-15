@@ -83,7 +83,7 @@ int nova_handle_head_tail_blocks(struct super_block *sb,
 	size_t offset, eblk_offset;
 	unsigned long start_blk, end_blk, num_blocks;
 	struct nova_file_write_entry *entry;
-	timing_t partial_time;
+	INIT_TIMING(partial_time);
 	int ret = 0;
 
 	NOVA_START_TIMING(partial_block_t, partial_time);
@@ -272,7 +272,7 @@ unsigned long nova_check_existing_entry(struct super_block *sb,
 	struct nova_file_write_entry *entry;
 	unsigned long next_pgoff;
 	unsigned long ent_blks = 0;
-	timing_t check_time;
+	INIT_TIMING(check_time);
 
 	NOVA_START_TIMING(check_entry_t, check_time);
 
@@ -516,7 +516,8 @@ ssize_t do_nova_inplace_file_write(struct file *filp,
 	u64 blk_off;
 	size_t bytes;
 	long status = 0;
-	timing_t inplace_write_time, memcpy_time;
+	INIT_TIMING(inplace_write_time);
+	INIT_TIMING(memcpy_time);
 	unsigned long step = 0;
 	u64 epoch_id;
 	u64 file_size;
@@ -752,8 +753,7 @@ static int nova_dax_get_blocks(struct inode *inode, sector_t iblock,
 	int locked = 0;
 	int check_next;
 	int ret = 0;
-	timing_t get_block_time;
-
+	INIT_TIMING(get_block_time);
 
 	if (max_blocks == 0)
 		return 0;
@@ -915,7 +915,7 @@ static int nova_dax_huge_fault(struct vm_fault *vmf,
 	enum page_entry_size pe_size)
 {
 	int ret = 0;
-	timing_t fault_time;
+	INIT_TIMING(fault_time);
 	struct address_space *mapping = vmf->vma->vm_file->f_mapping;
 	struct inode *inode = mapping->host;
 

@@ -189,7 +189,7 @@ static int nova_rebuild_file_inode_tree(struct super_block *sb,
 	struct nova_inode_rebuild rebuild, *reb;
 	unsigned int data_bits = blk_type_to_shift[sih->i_blk_type];
 	u64 ino = pi->nova_ino;
-	timing_t rebuild_time;
+	INIT_TIMING(rebuild_time);
 	void *addr, *entryc = NULL;
 	u64 curr_p;
 	u8 type;
@@ -371,7 +371,7 @@ int nova_rebuild_dir_inode_tree(struct super_block *sb,
 	struct nova_inode_rebuild rebuild, *reb;
 	u64 ino = pi->nova_ino;
 	unsigned short de_len;
-	timing_t rebuild_time;
+	INIT_TIMING(rebuild_time);
 	void *addr, *entryc = NULL;
 	u64 curr_p;
 	u8 type;

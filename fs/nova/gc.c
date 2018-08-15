@@ -84,7 +84,7 @@ static bool curr_page_invalid(struct super_block *sb,
 	unsigned int num_entries;
 	unsigned int invalid_entries;
 	bool ret;
-	timing_t check_time;
+	INIT_TIMING(check_time);
 	int rc;
 
 	NOVA_START_TIMING(check_invalid_t, check_time);
@@ -235,7 +235,7 @@ static unsigned long nova_inode_log_thorough_gc(struct super_block *sb,
 	int allocated;
 	int extended = 0;
 	int ret;
-	timing_t gc_time;
+	INIT_TIMING(gc_time);
 
 	NOVA_START_TIMING(thorough_gc_t, gc_time);
 
@@ -347,7 +347,7 @@ int nova_inode_log_fast_gc(struct super_block *sb,
 	unsigned long blocks;
 	unsigned long checked_pages = 0;
 	int freed_pages = 0;
-	timing_t gc_time;
+	INIT_TIMING(gc_time);
 
 	NOVA_START_TIMING(fast_gc_t, gc_time);
 	curr = sih->log_head;

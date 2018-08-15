@@ -150,7 +150,7 @@ static inline void sih_unlock_shared(struct nova_inode_info_header *header)
 
 static inline void nova_update_tail(struct nova_inode *pi, u64 new_tail)
 {
-	timing_t update_time;
+	INIT_TIMING(update_time);
 
 	NOVA_START_TIMING(update_tail_t, update_time);
 
